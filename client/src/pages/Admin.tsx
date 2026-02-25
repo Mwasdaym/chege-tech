@@ -10,7 +10,7 @@ import {
   Save, X, BadgePercent, Star, RotateCcw, Zap, Settings,
   CreditCard, AlertTriangle, Lock, Unlock, Copy, Activity,
   Terminal, Info, TriangleAlert, Filter, Upload, Download,
-  Search, BarChart2, Loader2
+  Search, BarChart2, Loader2, FileCheck, ClipboardCheck
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -1358,6 +1358,20 @@ function TransactionsTab() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "success" | "pending" | "failed">("all");
   const [resendingRef, setResendingRef] = useState<string | null>(null);
+  const [proofRef, setProofRef] = useState<string | null>(null);
+  const [proofData, setProofData] = useState<any>(null);
+  const [proofLoading, setProofLoading] = useState(false);
+
+  async function loadDeliveryProof(reference: string) {
+    setProofRef(reference);
+    setProofLoading(true);
+    setProofData(null);
+    try {
+      const res = await authFetch(`/api/admin/delivery-proof/${reference}`);
+      if (res.success) setProofData(res.proof);
+    } catch {}
+    setProofLoading(false);
+  }
 
   const allTxs: any[] = txData?.transactions ?? [];
   const filtered = allTxs.filter((tx) => {
@@ -1478,24 +1492,143 @@ function TransactionsTab() {
                       </TableCell>
                       <TableCell className="text-xs text-white/30">{new Date(tx.createdAt).toLocaleDateString()}</TableCell>
                       <TableCell>
-                        {tx.status === "success" && (
+                        <div className="flex items-center gap-1">
                           <Button size="sm" variant="ghost"
-                            className="h-7 px-2 text-white/40 hover:text-indigo-400 hover:bg-indigo-500/10"
-                            onClick={() => resendCredentials(tx.reference)}
-                            disabled={resendingRef === tx.reference}
-                            title="Resend credentials to customer"
-                            data-testid={`button-resend-${tx.id}`}>
-                            {resendingRef === tx.reference
-                              ? <div className="w-3.5 h-3.5 border border-white/40 border-t-transparent rounded-full animate-spin" />
-                              : <RotateCcw className="w-3.5 h-3.5" />}
+                            className="h-7 px-2 text-white/40 hover:text-emerald-400 hover:bg-emerald-500/10"
+                            onClick={() => loadDeliveryProof(tx.reference)}
+                            title="View delivery proof"
+                            data-testid={`button-proof-${tx.id}`}>
+                            <ClipboardCheck className="w-3.5 h-3.5" />
                           </Button>
-                        )}
+                          {tx.status === "success" && (
+                            <Button size="sm" variant="ghost"
+                              className="h-7 px-2 text-white/40 hover:text-indigo-400 hover:bg-indigo-500/10"
+                              onClick={() => resendCredentials(tx.reference)}
+                              disabled={resendingRef === tx.reference}
+                              title="Resend credentials to customer"
+                              data-testid={`button-resend-${tx.id}`}>
+                              {resendingRef === tx.reference
+                                ? <div className="w-3.5 h-3.5 border border-white/40 border-t-transparent rounded-full animate-spin" />
+                                : <RotateCcw className="w-3.5 h-3.5" />}
+                            </Button>
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   );
                 })}
               </TableBody>
             </Table>
+          </div>
+        </div>
+      )}
+
+      {proofRef && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+          onClick={(e) => { if (e.target === e.currentTarget) { setProofRef(null); setProofData(null); } }}>
+          <div className="glass border border-white/10 rounded-xl w-full max-w-lg max-h-[80vh] overflow-y-auto" data-testid="modal-delivery-proof">
+            <div className="flex items-center justify-between p-4 border-b border-white/10">
+              <div className="flex items-center gap-2">
+                <ClipboardCheck className="w-5 h-5 text-emerald-400" />
+                <h2 className="text-lg font-bold text-white">Delivery Proof</h2>
+              </div>
+              <Button size="sm" variant="ghost" onClick={() => { setProofRef(null); setProofData(null); }}
+                className="text-white/40 hover:text-white" data-testid="button-close-proof">
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+
+            {proofLoading ? (
+              <div className="p-8 text-center">
+                <Loader2 className="w-8 h-8 animate-spin text-white/40 mx-auto" />
+              </div>
+            ) : proofData ? (
+              <div className="p-4 space-y-4">
+                <div className="text-xs text-white/40 font-mono mb-2">Ref: {proofRef}</div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="glass border border-white/10 rounded-lg p-3 text-center">
+                    <div className="text-2xl font-bold text-white">{proofData.summary.totalAttempts}</div>
+                    <div className="text-xs text-white/50">Total Attempts</div>
+                  </div>
+                  <div className="glass border border-white/10 rounded-lg p-3 text-center">
+                    <div className="text-2xl font-bold text-emerald-400">{proofData.summary.successfulDeliveries}</div>
+                    <div className="text-xs text-white/50">Successful</div>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  <Badge className={proofData.summary.accountAssigned
+                    ? "bg-emerald-600/70 text-white border-0" : "bg-red-600/70 text-white border-0"}>
+                    {proofData.summary.accountAssigned ? "✓ Account Assigned" : "✗ Not Assigned"}
+                  </Badge>
+                  <Badge className={proofData.summary.emailDelivered
+                    ? "bg-emerald-600/70 text-white border-0" : "bg-red-600/70 text-white border-0"}>
+                    {proofData.summary.emailDelivered ? "✓ Email Delivered" : "✗ Email Not Sent"}
+                  </Badge>
+                </div>
+
+                {proofData.summary.methods.length > 0 && (
+                  <div className="text-xs text-white/40">
+                    Methods used: {proofData.summary.methods.map((m: string) => m.replace(/_/g, " ")).join(", ")}
+                  </div>
+                )}
+
+                <div className="space-y-2">
+                  <h3 className="text-sm font-semibold text-white/70 flex items-center gap-1.5">
+                    <Activity className="w-4 h-4" /> Delivery Timeline
+                  </h3>
+                  {proofData.logs.length === 0 ? (
+                    <div className="text-center py-6 text-white/30 text-sm">
+                      No delivery logs recorded for this transaction.
+                      <br />
+                      <span className="text-xs text-white/20">Logs are recorded for new orders going forward.</span>
+                    </div>
+                  ) : (
+                    <div className="space-y-1">
+                      {proofData.logs.map((log: any, i: number) => (
+                        <div key={log.id || i}
+                          className="glass border border-white/5 rounded-lg p-3"
+                          data-testid={`delivery-log-${i}`}>
+                          <div className="flex items-start justify-between gap-2 mb-1">
+                            <div className="flex items-center gap-1.5">
+                              {log.status === "success"
+                                ? <CheckCircle className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                                : <XCircle className="w-3.5 h-3.5 text-red-400 shrink-0" />}
+                              <span className="text-xs font-medium text-white/80">
+                                {log.method === "email" && "Email Delivery"}
+                                {log.method === "resend_email" && "Email Resend"}
+                                {log.method === "account_assignment" && "Account Assignment"}
+                                {log.method === "telegram_notification" && "Telegram Notification"}
+                                {log.method === "whatsapp_notification" && "WhatsApp Notification"}
+                              </span>
+                            </div>
+                            <Badge className={log.status === "success"
+                              ? "bg-emerald-600/50 text-emerald-200 border-0 text-[10px]"
+                              : "bg-red-600/50 text-red-200 border-0 text-[10px]"}>
+                              {log.status}
+                            </Badge>
+                          </div>
+                          <p className="text-xs text-white/50 mb-1">{log.details}</p>
+                          <div className="text-[10px] text-white/25 font-mono">
+                            {new Date(log.timestamp).toLocaleString()}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {proofData.summary.firstAttempt && (
+                  <div className="text-[11px] text-white/30 border-t border-white/5 pt-3 space-y-0.5">
+                    <div>First attempt: {new Date(proofData.summary.firstAttempt).toLocaleString()}</div>
+                    <div>Last attempt: {new Date(proofData.summary.lastAttempt).toLocaleString()}</div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="p-8 text-center text-white/30 text-sm">Failed to load delivery proof.</div>
+            )}
           </div>
         </div>
       )}

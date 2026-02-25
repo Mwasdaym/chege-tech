@@ -28,6 +28,7 @@ import { getEmailUser, getEmailPass } from "./secrets";
 import { getAppConfig, saveAppConfig } from "./app-config";
 import { getCredentialsOverride, saveCredentialsOverride } from "./credentials-store";
 import { logAdminAction, getAdminLogs } from "./admin-logger";
+import { logDelivery, getDeliveryProof, getDeliveryLogs } from "./delivery-log";
 import speakeasy from "speakeasy";
 import QRCode from "qrcode";
 
@@ -185,21 +186,50 @@ async function verifyPaystackPayment(reference: string): Promise<{
 }
 
 async function deliverAccount(transaction: any): Promise<{ success: boolean; error?: string }> {
+  const logBase = {
+    reference: transaction.reference,
+    customerEmail: transaction.customerEmail,
+    customerName: transaction.customerName || "Customer",
+    planName: transaction.planName,
+    planId: transaction.planId,
+  };
+
   const account = accountManager.assignAccount(
     transaction.planId,
     transaction.customerEmail,
     transaction.customerName || "Customer"
   );
   if (!account) {
+    logDelivery({ ...logBase, method: "account_assignment", status: "failed", details: "No account available in stock" });
     await storage.updateTransaction(transaction.reference, { status: "failed" });
     return { success: false, error: "No account available - contact support for refund" };
   }
+
+  logDelivery({
+    ...logBase,
+    method: "account_assignment",
+    status: "success",
+    details: `Account assigned — ID: ${account.id}`,
+    metadata: { accountId: account.id, accountEmail: account.email },
+  });
+
   const emailResult = await sendAccountEmail(
     transaction.customerEmail,
     transaction.planName,
     account,
     transaction.customerName || "Customer"
   );
+
+  logDelivery({
+    ...logBase,
+    method: "email",
+    status: emailResult.success ? "success" : "failed",
+    details: emailResult.success
+      ? `Credentials email sent to ${transaction.customerEmail}`
+      : `Email delivery failed: ${emailResult.error || "unknown error"}`,
+    metadata: { recipientEmail: transaction.customerEmail },
+  });
+
   await storage.updateTransaction(transaction.reference, {
     status: "success",
     accountAssigned: true,
@@ -213,7 +243,11 @@ async function deliverAccount(transaction: any): Promise<{ success: boolean; err
     amount: transaction.amount,
     reference: transaction.reference,
   };
-  notifyNewOrder(orderOpts).catch(() => {});
+  notifyNewOrder(orderOpts).then(() => {
+    logDelivery({ ...logBase, method: "telegram_notification", status: "success", details: "Admin notified via Telegram" });
+  }).catch(() => {
+    logDelivery({ ...logBase, method: "telegram_notification", status: "failed", details: "Telegram notification failed" });
+  });
   const override = getCredentialsOverride();
   if (override.whatsappAdminPhone) {
     broadcastNewOrder({ adminPhone: override.whatsappAdminPhone, ...orderOpts }).catch(() => {});
@@ -643,8 +677,42 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const account = accountManager.findAccountByCustomer(tx.planId, tx.customerEmail);
       if (!account) return res.status(404).json({ success: false, error: "No assigned account found for this order" });
       const emailResult = await sendAccountEmail(tx.customerEmail, tx.planName, account, tx.customerName || "Customer");
+      logDelivery({
+        reference: tx.reference,
+        customerEmail: tx.customerEmail,
+        customerName: tx.customerName || "Customer",
+        planName: tx.planName,
+        planId: tx.planId,
+        method: "resend_email",
+        status: emailResult.success ? "success" : "failed",
+        details: emailResult.success
+          ? `Credentials re-sent to ${tx.customerEmail} (admin action)`
+          : `Resend failed: ${emailResult.error || "unknown error"}`,
+        metadata: { recipientEmail: tx.customerEmail, triggeredBy: "admin" },
+      });
       logAdminAction({ action: `Credentials resent to ${tx.customerEmail} for ${tx.planName}`, category: "transactions", status: "success" });
       res.json({ success: true, emailSent: emailResult.success });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // ─── Admin: Delivery Proof ──────────────────────────────────────────────
+  app.get("/api/admin/delivery-proof/:reference", adminAuthMiddleware, (req, res) => {
+    try {
+      const proof = getDeliveryProof(req.params.reference);
+      res.json({ success: true, proof });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  app.get("/api/admin/delivery-logs", adminAuthMiddleware, (req, res) => {
+    try {
+      const email = req.query.email as string | undefined;
+      const reference = req.query.reference as string | undefined;
+      const logs = getDeliveryLogs(reference, email);
+      res.json({ success: true, logs });
     } catch (err: any) {
       res.status(500).json({ success: false, error: err.message });
     }

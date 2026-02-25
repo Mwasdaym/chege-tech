@@ -2,6 +2,10 @@
 
 A full-stack website for selling shared premium subscription accounts with Paystack payment processing, automatic email delivery, customer accounts, cart system, and a comprehensive admin panel.
 
+## Database
+
+Uses **SQLite** (file-based) via `better-sqlite3` + Drizzle ORM. The database file is auto-created at `data/database.sqlite` on first startup. Tables are created automatically via `initializeDatabase()` in `server/storage.ts`.
+
 ## Features
 
 ### Public Store
@@ -16,7 +20,7 @@ A full-stack website for selling shared premium subscription accounts with Payst
 - **Sign Up** - Email + password registration with email verification (6-digit code)
 - **Sign In** - Session-based login stored in database
 - **Forgot Password** - 6-digit email reset code, 15-minute expiry, enter code + new password to reset
-- **Order History** - View all past purchases linked to your email
+- **My Products** - View all past purchases linked to your email
 - **Credentials Viewer** - Toggle-reveal credentials (email/password/activation codes) on completed orders with per-field copy buttons
 - **API Keys** - Generate/revoke personal API keys (max 5 per customer)
 - **2FA** - Customer-side TOTP 2FA via authenticator app
@@ -40,6 +44,11 @@ A full-stack website for selling shared premium subscription accounts with Payst
 - **Activity Logs** - Full audit log of all admin actions, filterable by category, clearable
 - **Settings** - Editable credentials (Paystack, Email, Admin login, Telegram Bot), App config (WhatsApp, site name), 2FA management
 
+### Telegram Bot
+- Admin commands: `/addaccount`, `/stock`, `/stats`
+- Customer commands: `/buy` (browse & get payment link), `/myorders` (check orders by email)
+- Long polling started automatically on server startup
+
 ## Database Tables
 - `transactions` - Payment records
 - `customers` - Registered customer accounts
@@ -51,8 +60,7 @@ A full-stack website for selling shared premium subscription accounts with Payst
 - `PAYSTACK_SECRET_KEY` - Paystack secret key
 - `EMAIL_USER` - Gmail address for sending emails
 - `EMAIL_PASS` - Gmail app password
-- `ADMIN_EMAIL` - Admin login email (default: admin@example.com)
-- `ADMIN_PASSWORD` - Admin login password (default: admin123)
+- `SESSION_SECRET` - Session encryption key
 - `TELEGRAM_BOT_TOKEN` - (optional) Telegram bot token from @BotFather
 - `TELEGRAM_CHAT_ID` - (optional) Telegram chat/group/channel ID for notifications
 
@@ -68,16 +76,26 @@ All of these can also be set directly from the admin panel Settings tab without 
 - `server/auth.ts` - Admin TOTP auth
 - `server/email.ts` - Email sending (account delivery + password reset)
 - `server/telegram.ts` - Telegram bot notifications
-- `server/storage.ts` - Database CRUD layer
+- `server/telegram-bot.ts` - Interactive Telegram bot with long polling
+- `server/storage.ts` - Database CRUD layer (SQLite via better-sqlite3)
 - `server/credentials-store.ts` - Override credentials storage
 - `server/admin-logger.ts` - Admin activity logging
 - `server/plans.ts` - Predefined plan catalog
+- `shared/schema.ts` - Drizzle ORM schema (SQLite dialect)
 - `accounts.json` - Account inventory
 - `plan-overrides.json` - Price/offer overrides
 - `custom-plans.json` - Admin-created custom plans
 - `promo-codes.json` - Discount codes
 - `credentials-override.json` - Admin-set credential overrides
 - `admin-logs.json` - Admin activity log
+
+## GitHub
+- Repository: https://github.com/Mwasdaym/chege-tech
+
+## Deployment (Render)
+- Build command: `npm install && npm run build`
+- Start command: `npm start`
+- Required env vars: DATABASE_URL not needed (SQLite file auto-created), set PAYSTACK keys, EMAIL credentials, SESSION_SECRET
 
 ## Branding
 - Site name: Chege Tech
