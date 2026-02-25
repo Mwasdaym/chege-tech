@@ -5,6 +5,7 @@ import { createServer } from "http";
 import { initializeDatabase, storage } from "./storage";
 
 const app = express();
+app.set("trust proxy", 1);
 const httpServer = createServer(app);
 
 declare module "http" {

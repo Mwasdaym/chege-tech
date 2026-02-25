@@ -1,5 +1,6 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
+import crypto from "crypto";
 import axios from "axios";
 import bcrypt from "bcryptjs";
 import { v4 as uuidv4 } from "uuid";
@@ -34,6 +35,12 @@ import QRCode from "qrcode";
 
 function generateVerificationCode(): string {
   return Math.floor(100000 + Math.random() * 900000).toString();
+}
+
+function getBaseUrl(req: any): string {
+  const proto = req.headers["x-forwarded-proto"] || req.protocol || "https";
+  const host = req.get("host") || "";
+  return `${proto}://${host}`;
 }
 
 async function sendVerificationEmail(email: string, code: string, name?: string): Promise<void> {
@@ -354,7 +361,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           amount: finalAmount * 100,
           reference,
           metadata: { planId, planName: plan.name, customerName, promoCode: promoUsed },
-          callback_url: `${req.protocol}://${req.get("host")}/payment/success?ref=${reference}`,
+          callback_url: `${getBaseUrl(req)}/payment/success?ref=${reference}`,
         },
         { headers: { Authorization: `Bearer ${paystackSecret}` } }
       );
@@ -448,6 +455,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const psRes = await axios.post(
         "https://api.paystack.co/transaction/initialize",
         { email, amount: totalAmount * 100, reference, currency: "KES",
+          callback_url: `${getBaseUrl(req)}/payment/cart-success?ref=${reference}`,
           metadata: { cartRef: reference, items: expandedItems.length, customerName } },
         { headers: { Authorization: `Bearer ${paystackSecret}` } }
       );
@@ -503,6 +511,51 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       res.redirect(`/checkout?planId=${transaction.planId}&error=payment_failed`);
     } catch {
       res.redirect("/");
+    }
+  });
+
+  // ─── Paystack Webhook (server-to-server backup delivery) ─────────────────
+  app.post("/api/paystack/webhook", async (req: any, res) => {
+    try {
+      const paystackSecret = getPaystackSecretKey();
+      if (!paystackSecret) return res.sendStatus(200);
+
+      const signature = req.headers["x-paystack-signature"];
+      if (signature) {
+        const hash = crypto.createHmac("sha512", paystackSecret)
+          .update(typeof req.rawBody === "string" ? req.rawBody : (req.rawBody instanceof Buffer ? req.rawBody : JSON.stringify(req.body)))
+          .digest("hex");
+        if (hash !== signature) {
+          console.log("[webhook] Invalid signature — ignoring");
+          return res.sendStatus(200);
+        }
+      }
+
+      const event = req.body;
+      if (event.event !== "charge.success") return res.sendStatus(200);
+
+      const reference = event.data?.reference;
+      if (!reference) return res.sendStatus(200);
+
+      console.log(`[webhook] charge.success for ref=${reference}`);
+
+      if (reference.startsWith("ct-cart-")) {
+        const allTx = await storage.getAllTransactions();
+        const cartTxs = allTx.filter((t) => t.paystackReference === reference && t.status === "pending");
+        for (const tx of cartTxs) {
+          await deliverAccount(tx);
+        }
+      } else {
+        const transaction = await storage.getTransaction(reference);
+        if (transaction && transaction.status === "pending") {
+          await deliverAccount(transaction);
+        }
+      }
+
+      res.sendStatus(200);
+    } catch (err: any) {
+      console.error("[webhook] Error:", err.message);
+      res.sendStatus(200);
     }
   });
 
