@@ -10,7 +10,8 @@ import {
   Save, X, BadgePercent, Star, RotateCcw, Zap, Settings,
   CreditCard, AlertTriangle, Lock, Unlock, Copy, Activity,
   Terminal, Info, TriangleAlert, Filter, Upload, Download,
-  Search, BarChart2, Loader2, FileCheck, ClipboardCheck, Send
+  Search, BarChart2, Loader2, FileCheck, ClipboardCheck, Send,
+  ShieldOff
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -164,7 +165,7 @@ function LoginFlow({ onLogin }: { onLogin: (token: string) => void }) {
   const [isLoading, setIsLoading] = useState(false);
   const [, setLocation] = useLocation();
   const { toast } = useToast();
-  const [resetMode, setResetMode] = useState<"none" | "email" | "code">("none");
+  const [resetMode, setResetMode] = useState<"none" | "email" | "code" | "2fa-email" | "2fa-code">("none");
   const [resetEmail, setResetEmail] = useState("");
   const [resetCode, setResetCode] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -198,6 +199,55 @@ function LoginFlow({ onLogin }: { onLogin: (token: string) => void }) {
     } finally {
       setIsLoading(false);
     }
+  }
+
+  async function handleRequest2faReset(e: React.FormEvent) {
+    e.preventDefault();
+    if (!resetEmail.trim()) return;
+    setIsLoading(true);
+    setLoginError("");
+    try {
+      const res = await fetch("/api/admin/reset-2fa/request", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: resetEmail.trim() }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setResetMode("2fa-code");
+        setResetCode("");
+        toast({ title: "Check your email", description: "A 6-digit 2FA reset code has been sent" });
+      } else {
+        setLoginError(data.error || "Failed to send reset code");
+      }
+    } catch {
+      setLoginError("Connection error");
+    } finally { setIsLoading(false); }
+  }
+
+  async function handleConfirm2faReset(e: React.FormEvent) {
+    e.preventDefault();
+    if (!resetCode.trim()) return;
+    setIsLoading(true);
+    setLoginError("");
+    try {
+      const res = await fetch("/api/admin/reset-2fa/confirm", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: resetEmail.trim(), code: resetCode.trim() }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast({ title: "2FA Disabled!", description: data.message });
+        setResetMode("none");
+        setResetEmail("");
+        setResetCode("");
+      } else {
+        setLoginError(data.error || "Reset failed");
+      }
+    } catch {
+      setLoginError("Connection error");
+    } finally { setIsLoading(false); }
   }
 
   async function handleForgotPassword(e: React.FormEvent) {
@@ -271,10 +321,10 @@ function LoginFlow({ onLogin }: { onLogin: (token: string) => void }) {
             <Shield className="w-8 h-8 text-white" />
           </div>
           <h1 className="text-2xl font-bold text-white mb-1">
-            {resetMode === "none" ? "Admin Login" : resetMode === "email" ? "Reset Password" : "Enter Reset Code"}
+            {resetMode === "none" ? "Admin Login" : resetMode === "email" ? "Reset Password" : resetMode === "code" ? "Enter Reset Code" : resetMode === "2fa-email" ? "Reset Authenticator" : "Confirm 2FA Reset"}
           </h1>
           <p className="text-white/40 text-sm">
-            {resetMode === "none" ? "Secure admin access" : resetMode === "email" ? "Enter your admin email" : "Check your email for the code"}
+            {resetMode === "none" ? "Secure admin access" : resetMode === "email" ? "Enter your admin email" : resetMode === "code" ? "Check your email for the code" : resetMode === "2fa-email" ? "Verify your identity to disable 2FA" : "Enter the code sent to your email"}
           </p>
         </div>
 
@@ -323,9 +373,19 @@ function LoginFlow({ onLogin }: { onLogin: (token: string) => void }) {
                   {setupComplete && (
                     <FormField control={form.control} name="totpCode" render={({ field }) => (
                       <FormItem>
-                        <FormLabel className="text-white/60 text-xs uppercase tracking-wider flex items-center gap-1.5">
-                          <Key className="w-3 h-3" />Authenticator Code
-                        </FormLabel>
+                        <div className="flex items-center justify-between">
+                          <FormLabel className="text-white/60 text-xs uppercase tracking-wider flex items-center gap-1.5">
+                            <Key className="w-3 h-3" />Authenticator Code
+                          </FormLabel>
+                          <button
+                            type="button"
+                            onClick={() => { setResetMode("2fa-email"); setLoginError(""); }}
+                            className="text-xs text-red-400 hover:text-red-300 transition-colors"
+                            data-testid="link-reset-2fa"
+                          >
+                            Lost authenticator?
+                          </button>
+                        </div>
                         <FormControl>
                           <Input {...field} placeholder="000000" maxLength={6} inputMode="numeric"
                             className="glass border-white/10 bg-white/5 text-white placeholder:text-white/25 text-center font-mono text-xl tracking-[0.5em] focus:border-indigo-500/50"
@@ -441,6 +501,72 @@ function LoginFlow({ onLogin }: { onLogin: (token: string) => void }) {
               </Button>
               <button type="button" onClick={() => { setResetMode("none"); setLoginError(""); }}
                 className="w-full text-center text-sm text-white/40 hover:text-white/70 transition-colors mt-1" data-testid="link-back-to-login-2">
+                Back to Login
+              </button>
+            </form>
+          )}
+          {resetMode === "2fa-email" && (
+            <form onSubmit={handleRequest2faReset} className="space-y-4">
+              <div>
+                <label className="text-white/60 text-xs uppercase tracking-wider block mb-1.5">Admin Email</label>
+                <Input
+                  type="email"
+                  value={resetEmail}
+                  onChange={(e) => setResetEmail(e.target.value)}
+                  placeholder="admin@example.com"
+                  className="glass border-white/10 bg-white/5 text-white placeholder:text-white/25 focus:border-indigo-500/50"
+                  data-testid="input-2fa-reset-email"
+                />
+              </div>
+              <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20">
+                <p className="text-xs text-amber-400">A verification code will be sent to your admin email to confirm your identity before disabling 2FA.</p>
+              </div>
+              {loginError && (
+                <div className="flex items-center gap-2 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-sm text-red-400">
+                  <AlertTriangle className="w-4 h-4 shrink-0" />{loginError}
+                </div>
+              )}
+              <Button type="submit" disabled={isLoading || !resetEmail.trim()}
+                className="w-full bg-gradient-to-r from-red-600 to-red-700 border-0 text-white font-semibold h-11"
+                data-testid="button-send-2fa-reset-code">
+                {isLoading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Sending...</> : <><Mail className="w-4 h-4 mr-2" />Send 2FA Reset Code</>}
+              </Button>
+              <button type="button" onClick={() => { setResetMode("none"); setLoginError(""); }}
+                className="w-full text-center text-sm text-white/40 hover:text-white/70 transition-colors mt-1" data-testid="link-back-to-login-3">
+                Back to Login
+              </button>
+            </form>
+          )}
+
+          {resetMode === "2fa-code" && (
+            <form onSubmit={handleConfirm2faReset} className="space-y-4">
+              <div>
+                <label className="text-white/60 text-xs uppercase tracking-wider block mb-1.5">Verification Code</label>
+                <Input
+                  value={resetCode}
+                  onChange={(e) => setResetCode(e.target.value)}
+                  placeholder="000000"
+                  maxLength={6}
+                  inputMode="numeric"
+                  className="glass border-white/10 bg-white/5 text-white placeholder:text-white/25 text-center font-mono text-xl tracking-[0.5em] focus:border-indigo-500/50"
+                  data-testid="input-2fa-reset-code"
+                />
+              </div>
+              <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20">
+                <p className="text-xs text-red-400">Entering this code will disable two-factor authentication on your admin account. You can re-enable it after logging in.</p>
+              </div>
+              {loginError && (
+                <div className="flex items-center gap-2 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-sm text-red-400">
+                  <AlertTriangle className="w-4 h-4 shrink-0" />{loginError}
+                </div>
+              )}
+              <Button type="submit" disabled={isLoading || !resetCode.trim()}
+                className="w-full bg-gradient-to-r from-red-600 to-red-700 border-0 text-white font-semibold h-11"
+                data-testid="button-confirm-2fa-reset">
+                {isLoading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Disabling 2FA...</> : <><ShieldOff className="w-4 h-4 mr-2" />Disable 2FA</>}
+              </Button>
+              <button type="button" onClick={() => { setResetMode("none"); setLoginError(""); }}
+                className="w-full text-center text-sm text-white/40 hover:text-white/70 transition-colors mt-1" data-testid="link-back-to-login-4">
                 Back to Login
               </button>
             </form>

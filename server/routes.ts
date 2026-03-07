@@ -25,6 +25,10 @@ import {
   generateAdminResetCode,
   verifyAdminResetCode,
   clearAdminResetCode,
+  generateTotpResetCode,
+  verifyTotpResetCode,
+  clearTotpResetCode,
+  disableAdminTotp,
 } from "./auth";
 import { getPaystackSecretKey, getPaystackPublicKey, getSecretsStatus } from "./secrets";
 import nodemailer from "nodemailer";
@@ -746,6 +750,96 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     } catch (err: any) {
       console.error("[admin] reset-password error:", err.message);
       res.status(500).json({ success: false, error: "Password reset failed. Please try again." });
+    }
+  });
+
+  // ─── Admin: Request 2FA Reset Code ─────────────────────────────────────────
+  const totpResetTimestamps = new Map<string, number>();
+  app.post("/api/admin/reset-2fa/request", async (req, res) => {
+    try {
+      const { email } = req.body;
+      if (!email) return res.status(400).json({ success: false, error: "Email is required" });
+      const ip = req.headers["x-forwarded-for"]?.toString() || req.socket.remoteAddress || "unknown";
+      const lastRequest = totpResetTimestamps.get(ip) || 0;
+      if (Date.now() - lastRequest < 60000) {
+        return res.status(429).json({ success: false, error: "Please wait before requesting another code" });
+      }
+      totpResetTimestamps.set(ip, Date.now());
+      const creds = getAdminCredentials();
+      if (email.toLowerCase() !== creds.email.toLowerCase()) {
+        return res.json({ success: true, message: "If this email is registered, a reset code has been sent" });
+      }
+      if (!isSetupComplete()) {
+        return res.json({ success: true, message: "2FA is not enabled on this account" });
+      }
+      const senderEmail = getEmailUser();
+      const senderPass = getEmailPass();
+      if (!senderEmail || !senderPass) {
+        return res.status(503).json({ success: false, error: "Email service not configured" });
+      }
+      const code = generateTotpResetCode();
+      const transporter = nodemailer.createTransport({ service: "gmail", auth: { user: senderEmail, pass: senderPass } });
+      await transporter.sendMail({
+        from: `"Chege Tech Admin" <${senderEmail}>`,
+        to: creds.email,
+        subject: "Admin 2FA Reset Code",
+        html: `
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+<body style="margin:0;padding:0;background:#f0f4f8;font-family:'Segoe UI',Arial,sans-serif;">
+  <div style="max-width:500px;margin:40px auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.10);">
+    <div style="background:linear-gradient(135deg,#dc2626 0%,#991b1b 100%);padding:32px;text-align:center;">
+      <h1 style="color:#fff;margin:0 0 6px;font-size:24px;font-weight:700;">2FA Reset Request</h1>
+      <p style="color:rgba(255,255,255,.85);margin:0;font-size:14px;">Chege Tech Admin Security</p>
+    </div>
+    <div style="padding:32px;text-align:center;">
+      <p style="font-size:14px;color:#555;margin:0 0 12px;">Someone requested to <strong>disable two-factor authentication</strong> on your admin account.</p>
+      <p style="font-size:14px;color:#555;margin:0 0 28px;">Use the code below to confirm. It expires in <strong>15 minutes</strong>.</p>
+      <div style="background:#1e1b4b;border-radius:12px;padding:24px;margin:0 auto 28px;display:inline-block;">
+        <span style="font-size:40px;font-weight:900;letter-spacing:12px;color:#fca5a5;font-family:monospace;">${code}</span>
+      </div>
+      <p style="font-size:13px;color:#dc2626;font-weight:600;margin:0 0 8px;">If you didn't request this, someone may be trying to access your account.</p>
+      <p style="font-size:13px;color:#888;margin:0;">Your 2FA has NOT been changed. You can safely ignore this email.</p>
+    </div>
+    <div style="background:#f8faff;padding:16px;text-align:center;border-top:1px solid #eee;">
+      <p style="font-size:12px;color:#aaa;margin:0;">&copy; ${new Date().getFullYear()} Chege Tech. All rights reserved.</p>
+    </div>
+  </div>
+</body>
+</html>`,
+      });
+      logAdminAction({ action: "Admin 2FA reset requested", category: "auth", details: `Email: ${email}`, status: "warning" });
+      res.json({ success: true, message: "Reset code sent to admin email" });
+    } catch (err: any) {
+      console.error("[admin] reset-2fa request error:", err.message);
+      res.status(500).json({ success: false, error: "Failed to send reset code. Please try again." });
+    }
+  });
+
+  // ─── Admin: Verify 2FA Reset Code & Disable 2FA ──────────────────────────
+  app.post("/api/admin/reset-2fa/confirm", (req, res) => {
+    try {
+      const { email, code } = req.body;
+      if (!email || !code) return res.status(400).json({ success: false, error: "Email and code are required" });
+
+      const creds = getAdminCredentials();
+      if (email.toLowerCase() !== creds.email.toLowerCase()) {
+        return res.status(400).json({ success: false, error: "Invalid reset request" });
+      }
+
+      const result = verifyTotpResetCode(code);
+      if (!result.valid) {
+        return res.status(400).json({ success: false, error: result.error || "Invalid or expired code" });
+      }
+
+      disableAdminTotp();
+      clearTotpResetCode();
+      logAdminAction({ action: "Admin 2FA reset completed", category: "auth", details: `Email: ${email} — 2FA disabled via email verification`, status: "warning" });
+      res.json({ success: true, message: "Two-factor authentication has been disabled. You can now log in without an authenticator code." });
+    } catch (err: any) {
+      console.error("[admin] reset-2fa confirm error:", err.message);
+      res.status(500).json({ success: false, error: "2FA reset failed. Please try again." });
     }
   });
 

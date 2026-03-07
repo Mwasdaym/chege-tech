@@ -1,4 +1,4 @@
 {
-  "totpSecret": "PFIUOUSFIVZG27K6FZWCCWDOIFKWOOSD",
-  "totpSetupComplete": true
+  "totpSecret": null,
+  "totpSetupComplete": false
 }

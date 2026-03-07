@@ -13,6 +13,9 @@ interface AdminConfig {
   passwordResetCodeHash?: string | null;
   passwordResetExpires?: string | null;
   passwordResetAttempts?: number;
+  totpResetCodeHash?: string | null;
+  totpResetExpires?: string | null;
+  totpResetAttempts?: number;
 }
 
 function readConfig(): AdminConfig {
@@ -176,6 +179,53 @@ export function clearAdminResetCode(): void {
   config.passwordResetCodeHash = null;
   config.passwordResetExpires = null;
   config.passwordResetAttempts = 0;
+  writeConfig(config);
+}
+
+export function generateTotpResetCode(): string {
+  const code = crypto.randomInt(100000, 999999).toString();
+  const config = readConfig();
+  config.totpResetCodeHash = hashCode(code);
+  config.totpResetExpires = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+  config.totpResetAttempts = 0;
+  writeConfig(config);
+  return code;
+}
+
+export function verifyTotpResetCode(code: string): { valid: boolean; error?: string } {
+  const config = readConfig();
+  if (!config.totpResetCodeHash || !config.totpResetExpires) {
+    return { valid: false, error: "No reset code was requested" };
+  }
+  if (new Date(config.totpResetExpires) < new Date()) {
+    clearTotpResetCode();
+    return { valid: false, error: "Reset code has expired" };
+  }
+  const attempts = (config.totpResetAttempts || 0) + 1;
+  if (attempts > MAX_RESET_ATTEMPTS) {
+    clearTotpResetCode();
+    return { valid: false, error: "Too many failed attempts. Request a new code." };
+  }
+  config.totpResetAttempts = attempts;
+  writeConfig(config);
+  if (hashCode(code) !== config.totpResetCodeHash) {
+    return { valid: false, error: `Invalid code. ${MAX_RESET_ATTEMPTS - attempts} attempts remaining.` };
+  }
+  return { valid: true };
+}
+
+export function clearTotpResetCode(): void {
+  const config = readConfig();
+  config.totpResetCodeHash = null;
+  config.totpResetExpires = null;
+  config.totpResetAttempts = 0;
+  writeConfig(config);
+}
+
+export function disableAdminTotp(): void {
+  const config = readConfig();
+  config.totpSecret = null;
+  config.totpSetupComplete = false;
   writeConfig(config);
 }
 
