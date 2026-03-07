@@ -1,0 +1,174 @@
+[
+  {
+    "reference": "ct-cart-1772007671134-ad9gheb1q-3",
+    "customerEmail": "brownsemily202@gmail.com",
+    "customerName": "Emily Browns",
+    "planName": "Prime Video (6 Months)",
+    "planId": "primevideo_6m",
+    "method": "telegram_notification",
+    "status": "success",
+    "details": "Admin notified via Telegram",
+    "id": "DL-1772007697812-igl4",
+    "timestamp": "2026-02-25T08:21:37.812Z"
+  },
+  {
+    "reference": "ct-cart-1772007671134-ad9gheb1q-3",
+    "customerEmail": "brownsemily202@gmail.com",
+    "customerName": "Emily Browns",
+    "planName": "Prime Video (6 Months)",
+    "planId": "primevideo_6m",
+    "method": "email",
+    "status": "success",
+    "details": "Credentials email sent to brownsemily202@gmail.com",
+    "metadata": {
+      "recipientEmail": "brownsemily202@gmail.com"
+    },
+    "id": "DL-1772007697617-wnh7",
+    "timestamp": "2026-02-25T08:21:37.617Z"
+  },
+  {
+    "reference": "ct-cart-1772007671134-ad9gheb1q-2",
+    "customerEmail": "brownsemily202@gmail.com",
+    "customerName": "Emily Browns",
+    "planName": "Prime Video (6 Months)",
+    "planId": "primevideo_6m",
+    "method": "telegram_notification",
+    "status": "success",
+    "details": "Admin notified via Telegram",
+    "id": "DL-1772007696830-zhnf",
+    "timestamp": "2026-02-25T08:21:36.830Z"
+  },
+  {
+    "reference": "ct-cart-1772007671134-ad9gheb1q-3",
+    "customerEmail": "brownsemily202@gmail.com",
+    "customerName": "Emily Browns",
+    "planName": "Prime Video (6 Months)",
+    "planId": "primevideo_6m",
+    "method": "account_assignment",
+    "status": "success",
+    "details": "Account assigned — ID: primevideo_6m_1771940188605_cnge667sj",
+    "metadata": {
+      "accountId": "primevideo_6m_1771940188605_cnge667sj",
+      "accountEmail": "wantampresident8@gmail.com"
+    },
+    "id": "DL-1772007696633-xz7v",
+    "timestamp": "2026-02-25T08:21:36.633Z"
+  },
+  {
+    "reference": "ct-cart-1772007671134-ad9gheb1q-2",
+    "customerEmail": "brownsemily202@gmail.com",
+    "customerName": "Emily Browns",
+    "planName": "Prime Video (6 Months)",
+    "planId": "primevideo_6m",
+    "method": "email",
+    "status": "success",
+    "details": "Credentials email sent to brownsemily202@gmail.com",
+    "metadata": {
+      "recipientEmail": "brownsemily202@gmail.com"
+    },
+    "id": "DL-1772007696629-hrhj",
+    "timestamp": "2026-02-25T08:21:36.629Z"
+  },
+  {
+    "reference": "ct-cart-1772007671134-ad9gheb1q-1",
+    "customerEmail": "brownsemily202@gmail.com",
+    "customerName": "Emily Browns",
+    "planName": "Prime Video (6 Months)",
+    "planId": "primevideo_6m",
+    "method": "telegram_notification",
+    "status": "success",
+    "details": "Admin notified via Telegram",
+    "id": "DL-1772007695859-rrz2",
+    "timestamp": "2026-02-25T08:21:35.859Z"
+  },
+  {
+    "reference": "ct-cart-1772007671134-ad9gheb1q-2",
+    "customerEmail": "brownsemily202@gmail.com",
+    "customerName": "Emily Browns",
+    "planName": "Prime Video (6 Months)",
+    "planId": "primevideo_6m",
+    "method": "account_assignment",
+    "status": "success",
+    "details": "Account assigned — ID: primevideo_6m_1771940188605_cnge667sj",
+    "metadata": {
+      "accountId": "primevideo_6m_1771940188605_cnge667sj",
+      "accountEmail": "wantampresident8@gmail.com"
+    },
+    "id": "DL-1772007695656-erbr",
+    "timestamp": "2026-02-25T08:21:35.656Z"
+  },
+  {
+    "reference": "ct-cart-1772007671134-ad9gheb1q-1",
+    "customerEmail": "brownsemily202@gmail.com",
+    "customerName": "Emily Browns",
+    "planName": "Prime Video (6 Months)",
+    "planId": "primevideo_6m",
+    "method": "email",
+    "status": "success",
+    "details": "Credentials email sent to brownsemily202@gmail.com",
+    "metadata": {
+      "recipientEmail": "brownsemily202@gmail.com"
+    },
+    "id": "DL-1772007695652-umyo",
+    "timestamp": "2026-02-25T08:21:35.652Z"
+  },
+  {
+    "reference": "ct-cart-1772007671134-ad9gheb1q-0",
+    "customerEmail": "brownsemily202@gmail.com",
+    "customerName": "Emily Browns",
+    "planName": "Prime Video (6 Months)",
+    "planId": "primevideo_6m",
+    "method": "telegram_notification",
+    "status": "success",
+    "details": "Admin notified via Telegram",
+    "id": "DL-1772007695232-yw7q",
+    "timestamp": "2026-02-25T08:21:35.232Z"
+  },
+  {
+    "reference": "ct-cart-1772007671134-ad9gheb1q-1",
+    "customerEmail": "brownsemily202@gmail.com",
+    "customerName": "Emily Browns",
+    "planName": "Prime Video (6 Months)",
+    "planId": "primevideo_6m",
+    "method": "account_assignment",
+    "status": "success",
+    "details": "Account assigned — ID: primevideo_6m_1771940188605_cnge667sj",
+    "metadata": {
+      "accountId": "primevideo_6m_1771940188605_cnge667sj",
+      "accountEmail": "wantampresident8@gmail.com"
+    },
+    "id": "DL-1772007694726-3iuw",
+    "timestamp": "2026-02-25T08:21:34.726Z"
+  },
+  {
+    "reference": "ct-cart-1772007671134-ad9gheb1q-0",
+    "customerEmail": "brownsemily202@gmail.com",
+    "customerName": "Emily Browns",
+    "planName": "Prime Video (6 Months)",
+    "planId": "primevideo_6m",
+    "method": "email",
+    "status": "success",
+    "details": "Credentials email sent to brownsemily202@gmail.com",
+    "metadata": {
+      "recipientEmail": "brownsemily202@gmail.com"
+    },
+    "id": "DL-1772007694716-q8c3",
+    "timestamp": "2026-02-25T08:21:34.716Z"
+  },
+  {
+    "reference": "ct-cart-1772007671134-ad9gheb1q-0",
+    "customerEmail": "brownsemily202@gmail.com",
+    "customerName": "Emily Browns",
+    "planName": "Prime Video (6 Months)",
+    "planId": "primevideo_6m",
+    "method": "account_assignment",
+    "status": "success",
+    "details": "Account assigned — ID: primevideo_6m_1771940188605_cnge667sj",
+    "metadata": {
+      "accountId": "primevideo_6m_1771940188605_cnge667sj",
+      "accountEmail": "wantampresident8@gmail.com"
+    },
+    "id": "DL-1772007693275-0mgf",
+    "timestamp": "2026-02-25T08:21:33.275Z"
+  }
+]

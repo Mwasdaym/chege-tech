@@ -1,7 +1,6 @@
-import fs from "fs";
-import path from "path";
+import { dbSettingsGet, dbSettingsSet } from "./storage";
 
-const CONFIG_FILE = path.join(process.cwd(), "app-config.json");
+const SETTINGS_KEY = "app_config";
 
 export interface AppConfig {
   siteName: string;
@@ -23,8 +22,8 @@ const DEFAULTS: AppConfig = {
 
 export function getAppConfig(): AppConfig {
   try {
-    if (fs.existsSync(CONFIG_FILE)) {
-      const raw = fs.readFileSync(CONFIG_FILE, "utf8");
+    const raw = dbSettingsGet(SETTINGS_KEY);
+    if (raw) {
       return { ...DEFAULTS, ...JSON.parse(raw) };
     }
   } catch {}
@@ -34,6 +33,6 @@ export function getAppConfig(): AppConfig {
 export function saveAppConfig(config: Partial<AppConfig>): AppConfig {
   const current = getAppConfig();
   const updated = { ...current, ...config };
-  fs.writeFileSync(CONFIG_FILE, JSON.stringify(updated, null, 2));
+  dbSettingsSet(SETTINGS_KEY, JSON.stringify(updated));
   return updated;
 }

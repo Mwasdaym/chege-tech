@@ -1,27 +1,32 @@
-import fs from "fs";
-import path from "path";
 import speakeasy from "speakeasy";
 import QRCode from "qrcode";
+import crypto from "crypto";
 import { getAdminEmail, getAdminPassword } from "./secrets";
+import { dbSettingsGet, dbSettingsSet } from "./storage";
+import { getAllAdminUsers as getAdminUsersList } from "./admin-users";
 
-const CONFIG_FILE = path.join(process.cwd(), "admin-config.json");
+const SETTINGS_KEY = "admin_config";
 
 interface AdminConfig {
   totpSecret: string | null;
   totpSetupComplete: boolean;
+  passwordResetCodeHash?: string | null;
+  passwordResetExpires?: string | null;
+  passwordResetAttempts?: number;
 }
 
 function readConfig(): AdminConfig {
   try {
-    if (fs.existsSync(CONFIG_FILE)) {
-      return JSON.parse(fs.readFileSync(CONFIG_FILE, "utf8"));
+    const raw = dbSettingsGet(SETTINGS_KEY);
+    if (raw) {
+      return JSON.parse(raw);
     }
   } catch { }
   return { totpSecret: null, totpSetupComplete: false };
 }
 
 function writeConfig(config: AdminConfig): void {
-  fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2));
+  dbSettingsSet(SETTINGS_KEY, JSON.stringify(config));
 }
 
 export function getAdminCredentials() {
@@ -84,32 +89,105 @@ export function verifyTotpWithSecret(token: string, secret: string): boolean {
   });
 }
 
-export function createAdminToken(): string {
+function getTokenSecret(): string {
   const { password } = getAdminCredentials();
-  const timestamp = Date.now();
-  return Buffer.from(`admin:${password}:${timestamp}`).toString("base64");
+  return password + (process.env.SESSION_SECRET || "ct-admin-secret");
 }
 
-export function validateAdminToken(token: string): boolean {
+export function createAdminToken(adminId?: string): string {
+  const id = adminId || "primary";
+  const timestamp = Date.now();
+  const payload = `${id}:${timestamp}`;
+  const signature = crypto.createHmac("sha256", getTokenSecret()).update(payload).digest("hex");
+  return Buffer.from(`${payload}:${signature}`).toString("base64");
+}
+
+export function validateAdminToken(token: string): { valid: boolean; adminId?: string } {
   try {
     const decoded = Buffer.from(token, "base64").toString("utf8");
     const parts = decoded.split(":");
-    if (parts[0] !== "admin") return false;
-    const { password } = getAdminCredentials();
-    if (parts[1] !== password) return false;
-    const timestamp = parseInt(parts[2]);
+    if (parts.length < 3) return { valid: false };
+    const adminId = parts[0];
+    const timestamp = parseInt(parts[1]);
+    const signature = parts[2];
+    const expectedPayload = `${adminId}:${timestamp}`;
+    const expectedSig = crypto.createHmac("sha256", getTokenSecret()).update(expectedPayload).digest("hex");
+    if (signature !== expectedSig) return { valid: false };
     const sessionAge = Date.now() - timestamp;
     const maxAge = 24 * 60 * 60 * 1000;
-    return sessionAge < maxAge;
+    if (sessionAge >= maxAge) return { valid: false };
+    if (adminId !== "primary") {
+      const users = getAdminUsersList();
+      if (!users.find((u) => u.id === adminId)) return { valid: false };
+    }
+    return { valid: true, adminId };
   } catch {
-    return false;
+    return { valid: false };
   }
+}
+
+export function getAdminRole(adminId: string): "superadmin" | "admin" {
+  if (adminId === "primary") return "superadmin";
+  const users = getAdminUsersList();
+  const user = users.find((u) => u.id === adminId);
+  return user?.role || "admin";
+}
+
+const MAX_RESET_ATTEMPTS = 5;
+
+function hashCode(code: string): string {
+  return crypto.createHash("sha256").update(code).digest("hex");
+}
+
+export function generateAdminResetCode(): string {
+  const code = crypto.randomInt(100000, 999999).toString();
+  const config = readConfig();
+  config.passwordResetCodeHash = hashCode(code);
+  config.passwordResetExpires = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+  config.passwordResetAttempts = 0;
+  writeConfig(config);
+  return code;
+}
+
+export function verifyAdminResetCode(code: string): { valid: boolean; error?: string } {
+  const config = readConfig();
+  if (!config.passwordResetCodeHash || !config.passwordResetExpires) {
+    return { valid: false, error: "No reset code was requested" };
+  }
+  if (new Date(config.passwordResetExpires) < new Date()) {
+    clearAdminResetCode();
+    return { valid: false, error: "Reset code has expired" };
+  }
+  const attempts = (config.passwordResetAttempts || 0) + 1;
+  if (attempts > MAX_RESET_ATTEMPTS) {
+    clearAdminResetCode();
+    return { valid: false, error: "Too many failed attempts. Request a new code." };
+  }
+  config.passwordResetAttempts = attempts;
+  writeConfig(config);
+  if (hashCode(code) !== config.passwordResetCodeHash) {
+    return { valid: false, error: `Invalid code. ${MAX_RESET_ATTEMPTS - attempts} attempts remaining.` };
+  }
+  return { valid: true };
+}
+
+export function clearAdminResetCode(): void {
+  const config = readConfig();
+  config.passwordResetCodeHash = null;
+  config.passwordResetExpires = null;
+  config.passwordResetAttempts = 0;
+  writeConfig(config);
 }
 
 export function adminAuthMiddleware(req: any, res: any, next: any) {
   const auth = req.headers.authorization;
   if (!auth) return res.status(401).json({ error: "Unauthorized" });
   const token = auth.replace("Bearer ", "");
-  if (validateAdminToken(token)) return next();
+  const result = validateAdminToken(token);
+  if (result.valid) {
+    req.adminId = result.adminId;
+    req.adminRole = getAdminRole(result.adminId || "primary");
+    return next();
+  }
   res.status(401).json({ error: "Unauthorized" });
 }

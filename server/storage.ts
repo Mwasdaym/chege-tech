@@ -1,6 +1,6 @@
 import Database from "better-sqlite3";
-import { drizzle } from "drizzle-orm/better-sqlite3";
-import { eq, desc, sql } from "drizzle-orm";
+import { drizzle as drizzleSqlite } from "drizzle-orm/better-sqlite3";
+import { eq, desc, sql, and, lt } from "drizzle-orm";
 import fs from "fs";
 import path from "path";
 import {
@@ -9,21 +9,119 @@ import {
   type Customer, type CustomerSession, type ApiKey,
 } from "@shared/schema";
 
-const DB_DIR = path.join(process.cwd(), "data");
-const DB_PATH = path.join(DB_DIR, "database.sqlite");
+let db: any;
+let sqliteInstance: any = null;
+let pgPool: any = null;
+let dbType: "sqlite" | "pg" = "sqlite";
 
-if (!fs.existsSync(DB_DIR)) {
-  fs.mkdirSync(DB_DIR, { recursive: true });
+const settingsCache: Map<string, string> = new Map();
+
+function getDb() {
+  if (db) return db;
+  throw new Error("Database not initialized. Call initializeDatabase() first.");
 }
 
-const sqlite = new Database(DB_PATH);
-sqlite.pragma("journal_mode = WAL");
-sqlite.pragma("foreign_keys = ON");
+export async function initializeDatabase() {
+  const externalDbUrl = process.env.EXTERNAL_DATABASE_URL;
 
-const db = drizzle(sqlite);
+  if (externalDbUrl) {
+    try {
+      const pg = await import("pg");
+      const Pool = pg.default?.Pool || pg.Pool;
+      pgPool = new Pool({ connectionString: externalDbUrl, ssl: { rejectUnauthorized: false } });
 
-export function initializeDatabase() {
-  sqlite.exec(`
+      await pgPool.query(`
+        CREATE TABLE IF NOT EXISTS transactions (
+          id SERIAL PRIMARY KEY,
+          reference TEXT UNIQUE NOT NULL,
+          plan_id TEXT NOT NULL,
+          plan_name TEXT NOT NULL,
+          customer_email TEXT NOT NULL,
+          customer_name TEXT,
+          amount INTEGER NOT NULL,
+          status TEXT DEFAULT 'pending',
+          email_sent BOOLEAN DEFAULT false,
+          account_assigned BOOLEAN DEFAULT false,
+          paystack_reference TEXT,
+          created_at TEXT DEFAULT (NOW()::text),
+          updated_at TEXT DEFAULT (NOW()::text)
+        );
+
+        CREATE TABLE IF NOT EXISTS customers (
+          id SERIAL PRIMARY KEY,
+          email TEXT UNIQUE NOT NULL,
+          name TEXT,
+          password_hash TEXT,
+          email_verified BOOLEAN DEFAULT false,
+          verification_code TEXT,
+          verification_expires TEXT,
+          suspended BOOLEAN DEFAULT false,
+          totp_secret TEXT,
+          totp_enabled BOOLEAN DEFAULT false,
+          password_reset_code TEXT,
+          password_reset_expires TEXT,
+          created_at TEXT DEFAULT (NOW()::text)
+        );
+
+        CREATE TABLE IF NOT EXISTS customer_sessions (
+          id SERIAL PRIMARY KEY,
+          customer_id INTEGER NOT NULL,
+          token TEXT UNIQUE NOT NULL,
+          created_at TEXT DEFAULT (NOW()::text),
+          expires_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS api_keys (
+          id SERIAL PRIMARY KEY,
+          customer_id INTEGER,
+          key TEXT UNIQUE NOT NULL,
+          label TEXT NOT NULL,
+          active BOOLEAN DEFAULT true,
+          created_at TEXT DEFAULT (NOW()::text)
+        );
+
+        CREATE TABLE IF NOT EXISTS settings (
+          key TEXT PRIMARY KEY,
+          value TEXT NOT NULL,
+          updated_at TEXT DEFAULT (NOW()::text)
+        );
+      `);
+
+      const drizzlePgModule = await import("drizzle-orm/node-postgres");
+      const drizzlePg = drizzlePgModule.drizzle;
+      db = drizzlePg(pgPool);
+      dbType = "pg";
+
+      const allSettings = await pgPool.query("SELECT key, value FROM settings");
+      for (const row of allSettings.rows) {
+        settingsCache.set(row.key, row.value);
+      }
+
+      console.log("[db] Connected to PostgreSQL (external), loaded", allSettings.rows.length, "settings");
+    } catch (err: any) {
+      console.error("[db] PostgreSQL connection failed, falling back to SQLite:", err.message);
+      initSqlite();
+    }
+  } else {
+    initSqlite();
+  }
+}
+
+function initSqlite() {
+  dbType = "sqlite";
+  const DB_DIR = path.join(process.cwd(), "data");
+  const DB_PATH = path.join(DB_DIR, "database.sqlite");
+
+  if (!fs.existsSync(DB_DIR)) {
+    fs.mkdirSync(DB_DIR, { recursive: true });
+  }
+
+  sqliteInstance = new Database(DB_PATH);
+  sqliteInstance.pragma("journal_mode = WAL");
+  sqliteInstance.pragma("foreign_keys = ON");
+  db = drizzleSqlite(sqliteInstance);
+
+  sqliteInstance.exec(`
     CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY,
       username TEXT NOT NULL UNIQUE,
@@ -78,7 +176,88 @@ export function initializeDatabase() {
       active INTEGER DEFAULT 1,
       created_at TEXT DEFAULT (datetime('now'))
     );
+
+    CREATE TABLE IF NOT EXISTS settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
   `);
+  console.log("[db] Connected to SQLite");
+}
+
+async function migrateJsonToDbAsync() {
+  const migrations: { key: string; file: string }[] = [
+    { key: "accounts", file: "accounts.json" },
+    { key: "admin_config", file: "admin-config.json" },
+    { key: "app_config", file: "app-config.json" },
+    { key: "credentials", file: "credentials-override.json" },
+    { key: "plan_overrides", file: "plan-overrides.json" },
+    { key: "custom_plans", file: "custom-plans.json" },
+    { key: "promo_codes", file: "promo-codes.json" },
+    { key: "delivery_logs", file: "delivery-logs.json" },
+    { key: "admin_logs", file: "admin-logs.json" },
+  ];
+
+  for (const { key, file } of migrations) {
+    const existing = dbSettingsGet(key);
+    if (existing) continue;
+
+    const filePath = path.join(process.cwd(), file);
+    if (fs.existsSync(filePath)) {
+      try {
+        const raw = fs.readFileSync(filePath, "utf8");
+        JSON.parse(raw);
+        dbSettingsSet(key, raw);
+        if (dbType === "pg" && pgPool) {
+          await pgPool.query(
+            "INSERT INTO settings (key, value, updated_at) VALUES ($1, $2, NOW()::text) ON CONFLICT(key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()::text",
+            [key, raw]
+          );
+        }
+        console.log(`[db] Migrated ${file} → settings.${key}`);
+      } catch (err: any) {
+        console.error(`[db] Failed to migrate ${file}:`, err.message);
+      }
+    }
+  }
+}
+
+export { migrateJsonToDbAsync as migrateJsonToDb };
+
+export function dbSettingsGet(key: string): string | null {
+  try {
+    if (dbType === "pg") {
+      return settingsCache.get(key) || null;
+    }
+    if (sqliteInstance) {
+      const row = sqliteInstance.prepare("SELECT value FROM settings WHERE key = ?").get(key) as any;
+      return row?.value || null;
+    }
+  } catch {}
+  return null;
+}
+
+export function dbSettingsSet(key: string, value: string): void {
+  try {
+    if (dbType === "pg") {
+      settingsCache.set(key, value);
+      if (pgPool) {
+        pgPool.query(
+          "INSERT INTO settings (key, value, updated_at) VALUES ($1, $2, NOW()::text) ON CONFLICT(key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()::text",
+          [key, value]
+        ).catch((err: any) => console.error(`[db] PG settings write error for ${key}:`, err.message));
+      }
+      return;
+    }
+    if (sqliteInstance) {
+      sqliteInstance.prepare(
+        "INSERT INTO settings (key, value, updated_at) VALUES (?, ?, datetime('now')) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = datetime('now')"
+      ).run(key, value);
+    }
+  } catch (err: any) {
+    console.error(`[db] settings set error for key=${key}:`, err.message);
+  }
 }
 
 export interface IStorage {
@@ -101,6 +280,9 @@ export interface IStorage {
 
   getAllCustomers(): Promise<Customer[]>;
 
+  cancelExpiredTransactions(minutesOld?: number): Promise<number>;
+  getApiKeyByKey(key: string): Promise<ApiKey | undefined>;
+
   createApiKey(data: { customerId?: number; key: string; label: string }): Promise<ApiKey>;
   getApiKeysByCustomer(customerId: number): Promise<ApiKey[]>;
   getAllApiKeys(): Promise<ApiKey[]>;
@@ -110,19 +292,19 @@ export interface IStorage {
 
 export class DbStorage implements IStorage {
   async createTransaction(data: InsertTransaction): Promise<Transaction> {
-    const [result] = await db.insert(transactions).values(data).returning();
+    const [result] = await getDb().insert(transactions).values(data).returning();
     return result;
   }
 
   async getTransaction(reference: string): Promise<Transaction | undefined> {
-    const [result] = await db.select().from(transactions).where(eq(transactions.reference, reference));
+    const [result] = await getDb().select().from(transactions).where(eq(transactions.reference, reference));
     return result;
   }
 
   async updateTransaction(reference: string, data: Partial<Transaction>): Promise<Transaction | undefined> {
     const updateData: any = { ...data };
     updateData.updatedAt = new Date().toISOString();
-    const [result] = await db
+    const [result] = await getDb()
       .update(transactions)
       .set(updateData)
       .where(eq(transactions.reference, reference))
@@ -131,29 +313,29 @@ export class DbStorage implements IStorage {
   }
 
   async getAllTransactions(): Promise<Transaction[]> {
-    return db.select().from(transactions).orderBy(desc(transactions.createdAt));
+    return getDb().select().from(transactions).orderBy(desc(transactions.createdAt));
   }
 
   async getTransactionsByEmail(email: string): Promise<Transaction[]> {
-    return db.select().from(transactions)
+    return getDb().select().from(transactions)
       .where(eq(transactions.customerEmail, email))
       .orderBy(desc(transactions.createdAt));
   }
 
   async getStats() {
-    const all = await db.select().from(transactions);
-    const completed = all.filter((t) => t.status === "success");
+    const all = await getDb().select().from(transactions);
+    const completed = all.filter((t: any) => t.status === "success");
     return {
       total: all.length,
       completed: completed.length,
-      pending: all.filter((t) => t.status === "pending").length,
-      revenue: completed.reduce((sum, t) => sum + t.amount, 0),
-      emailsSent: all.filter((t) => t.emailSent).length,
+      pending: all.filter((t: any) => t.status === "pending").length,
+      revenue: completed.reduce((sum: number, t: any) => sum + t.amount, 0),
+      emailsSent: all.filter((t: any) => t.emailSent).length,
     };
   }
 
   async createCustomer(data: { email: string; name?: string; passwordHash: string; verificationCode: string; verificationExpires: Date }): Promise<Customer> {
-    const [result] = await db.insert(customers).values({
+    const [result] = await getDb().insert(customers).values({
       email: data.email,
       name: data.name,
       passwordHash: data.passwordHash,
@@ -165,12 +347,12 @@ export class DbStorage implements IStorage {
   }
 
   async getCustomerByEmail(email: string): Promise<Customer | undefined> {
-    const [result] = await db.select().from(customers).where(eq(customers.email, email));
+    const [result] = await getDb().select().from(customers).where(eq(customers.email, email));
     return result;
   }
 
   async getCustomerById(id: number): Promise<Customer | undefined> {
-    const [result] = await db.select().from(customers).where(eq(customers.id, id));
+    const [result] = await getDb().select().from(customers).where(eq(customers.id, id));
     return result;
   }
 
@@ -182,12 +364,12 @@ export class DbStorage implements IStorage {
     if (updateData.passwordResetExpires instanceof Date) {
       updateData.passwordResetExpires = updateData.passwordResetExpires.toISOString();
     }
-    const [result] = await db.update(customers).set(updateData).where(eq(customers.id, id)).returning();
+    const [result] = await getDb().update(customers).set(updateData).where(eq(customers.id, id)).returning();
     return result;
   }
 
   async createCustomerSession(customerId: number, token: string, expiresAt: Date): Promise<CustomerSession> {
-    const [result] = await db.insert(customerSessions).values({
+    const [result] = await getDb().insert(customerSessions).values({
       customerId,
       token,
       expiresAt: expiresAt.toISOString(),
@@ -196,24 +378,49 @@ export class DbStorage implements IStorage {
   }
 
   async getCustomerSession(token: string): Promise<CustomerSession | undefined> {
-    const [result] = await db.select().from(customerSessions).where(eq(customerSessions.token, token));
+    const [result] = await getDb().select().from(customerSessions).where(eq(customerSessions.token, token));
     return result;
   }
 
   async deleteCustomerSession(token: string): Promise<void> {
-    await db.delete(customerSessions).where(eq(customerSessions.token, token));
+    await getDb().delete(customerSessions).where(eq(customerSessions.token, token));
   }
 
   async deleteExpiredSessions(): Promise<void> {
-    await db.delete(customerSessions);
+    await getDb().delete(customerSessions);
   }
 
   async getAllCustomers(): Promise<Customer[]> {
-    return db.select().from(customers).orderBy(desc(customers.createdAt));
+    return getDb().select().from(customers).orderBy(desc(customers.createdAt));
+  }
+
+  async cancelExpiredTransactions(minutesOld: number = 10): Promise<number> {
+    const all = await getDb().select().from(transactions).where(eq(transactions.status, "pending"));
+    const now = Date.now();
+    const cutoffMs = minutesOld * 60 * 1000;
+    const expiredRefs: string[] = [];
+    for (const t of all) {
+      if (!t.createdAt) continue;
+      const created = new Date(t.createdAt.replace(" ", "T") + (t.createdAt.includes("Z") ? "" : "Z")).getTime();
+      if (isNaN(created)) continue;
+      if (now - created > cutoffMs) expiredRefs.push(t.reference);
+    }
+    if (expiredRefs.length === 0) return 0;
+    let count = 0;
+    for (const ref of expiredRefs) {
+      await getDb().update(transactions).set({ status: "cancelled", updatedAt: new Date().toISOString() }).where(eq(transactions.reference, ref));
+      count++;
+    }
+    return count;
+  }
+
+  async getApiKeyByKey(key: string): Promise<ApiKey | undefined> {
+    const [result] = await getDb().select().from(apiKeys).where(eq(apiKeys.key, key));
+    return result;
   }
 
   async createApiKey(data: { customerId?: number; key: string; label: string }): Promise<ApiKey> {
-    const [result] = await db.insert(apiKeys).values({
+    const [result] = await getDb().insert(apiKeys).values({
       customerId: data.customerId ?? null,
       key: data.key,
       label: data.label,
@@ -223,19 +430,19 @@ export class DbStorage implements IStorage {
   }
 
   async getApiKeysByCustomer(customerId: number): Promise<ApiKey[]> {
-    return db.select().from(apiKeys).where(eq(apiKeys.customerId, customerId)).orderBy(desc(apiKeys.createdAt));
+    return getDb().select().from(apiKeys).where(eq(apiKeys.customerId, customerId)).orderBy(desc(apiKeys.createdAt));
   }
 
   async getAllApiKeys(): Promise<ApiKey[]> {
-    return db.select().from(apiKeys).orderBy(desc(apiKeys.createdAt));
+    return getDb().select().from(apiKeys).orderBy(desc(apiKeys.createdAt));
   }
 
   async revokeApiKey(id: number): Promise<void> {
-    await db.update(apiKeys).set({ active: false }).where(eq(apiKeys.id, id));
+    await getDb().update(apiKeys).set({ active: false }).where(eq(apiKeys.id, id));
   }
 
   async deleteApiKey(id: number): Promise<void> {
-    await db.delete(apiKeys).where(eq(apiKeys.id, id));
+    await getDb().delete(apiKeys).where(eq(apiKeys.id, id));
   }
 }
 

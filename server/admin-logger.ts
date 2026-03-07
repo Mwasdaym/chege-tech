@@ -1,7 +1,6 @@
-import fs from "fs";
-import path from "path";
+import { dbSettingsGet, dbSettingsSet } from "./storage";
 
-const LOG_FILE = path.join(process.cwd(), "admin-logs.json");
+const SETTINGS_KEY = "admin_logs";
 const MAX_ENTRIES = 500;
 
 export interface AdminLogEntry {
@@ -16,15 +15,14 @@ export interface AdminLogEntry {
 
 function loadLogs(): AdminLogEntry[] {
   try {
-    if (fs.existsSync(LOG_FILE)) {
-      return JSON.parse(fs.readFileSync(LOG_FILE, "utf8"));
-    }
+    const raw = dbSettingsGet(SETTINGS_KEY);
+    if (raw) return JSON.parse(raw);
   } catch {}
   return [];
 }
 
 function saveLogs(entries: AdminLogEntry[]): void {
-  fs.writeFileSync(LOG_FILE, JSON.stringify(entries, null, 2));
+  dbSettingsSet(SETTINGS_KEY, JSON.stringify(entries));
 }
 
 export function logAdminAction(params: Omit<AdminLogEntry, "id" | "timestamp">): void {

@@ -1,8 +1,7 @@
-import fs from "fs";
-import path from "path";
+import { dbSettingsGet, dbSettingsSet } from "./storage";
 
-const OVERRIDES_FILE = path.join(process.cwd(), "plan-overrides.json");
-const CUSTOM_PLANS_FILE = path.join(process.cwd(), "custom-plans.json");
+const OVERRIDES_KEY = "plan_overrides";
+const CUSTOM_PLANS_KEY = "custom_plans";
 
 export interface PlanOverride {
   priceOverride?: number;
@@ -30,28 +29,27 @@ export class PlanOverridesManager {
   constructor() {
     this.overrides = {};
     this.customPlans = [];
-    this.load();
   }
 
   private load(): void {
     try {
-      if (fs.existsSync(OVERRIDES_FILE)) {
-        this.overrides = JSON.parse(fs.readFileSync(OVERRIDES_FILE, "utf8"));
-      }
+      const raw = dbSettingsGet(OVERRIDES_KEY);
+      if (raw) this.overrides = JSON.parse(raw);
+      else this.overrides = {};
     } catch { this.overrides = {}; }
     try {
-      if (fs.existsSync(CUSTOM_PLANS_FILE)) {
-        this.customPlans = JSON.parse(fs.readFileSync(CUSTOM_PLANS_FILE, "utf8"));
-      }
+      const raw = dbSettingsGet(CUSTOM_PLANS_KEY);
+      if (raw) this.customPlans = JSON.parse(raw);
+      else this.customPlans = [];
     } catch { this.customPlans = []; }
   }
 
   private saveOverrides(): void {
-    fs.writeFileSync(OVERRIDES_FILE, JSON.stringify(this.overrides, null, 2));
+    dbSettingsSet(OVERRIDES_KEY, JSON.stringify(this.overrides));
   }
 
   private saveCustomPlans(): void {
-    fs.writeFileSync(CUSTOM_PLANS_FILE, JSON.stringify(this.customPlans, null, 2));
+    dbSettingsSet(CUSTOM_PLANS_KEY, JSON.stringify(this.customPlans));
   }
 
   getOverrides(): Record<string, PlanOverride> {

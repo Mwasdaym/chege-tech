@@ -1,7 +1,6 @@
-import fs from "fs";
-import path from "path";
+import { dbSettingsGet, dbSettingsSet } from "./storage";
 
-const CREDS_FILE = path.join(process.cwd(), "credentials-override.json");
+const SETTINGS_KEY = "credentials";
 
 export interface CredentialsOverride {
   paystackPublicKey?: string;
@@ -20,8 +19,8 @@ export interface CredentialsOverride {
 
 export function getCredentialsOverride(): CredentialsOverride {
   try {
-    if (fs.existsSync(CREDS_FILE)) {
-      const raw = fs.readFileSync(CREDS_FILE, "utf8");
+    const raw = dbSettingsGet(SETTINGS_KEY);
+    if (raw) {
       return JSON.parse(raw);
     }
   } catch {}
@@ -31,9 +30,8 @@ export function getCredentialsOverride(): CredentialsOverride {
 export function saveCredentialsOverride(data: CredentialsOverride): CredentialsOverride {
   let current: CredentialsOverride = {};
   try {
-    if (fs.existsSync(CREDS_FILE)) {
-      current = JSON.parse(fs.readFileSync(CREDS_FILE, "utf8"));
-    }
+    const raw = dbSettingsGet(SETTINGS_KEY);
+    if (raw) current = JSON.parse(raw);
   } catch {}
   const updated = { ...current };
   for (const [key, val] of Object.entries(data)) {
@@ -41,10 +39,9 @@ export function saveCredentialsOverride(data: CredentialsOverride): CredentialsO
       (updated as any)[key] = val === "" ? undefined : val;
     }
   }
-  // Remove undefined values
   for (const key of Object.keys(updated)) {
     if ((updated as any)[key] === undefined) delete (updated as any)[key];
   }
-  fs.writeFileSync(CREDS_FILE, JSON.stringify(updated, null, 2));
+  dbSettingsSet(SETTINGS_KEY, JSON.stringify(updated));
   return updated;
 }

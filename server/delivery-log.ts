@@ -1,7 +1,6 @@
-import fs from "fs";
-import path from "path";
+import { dbSettingsGet, dbSettingsSet } from "./storage";
 
-const LOG_FILE = path.join(process.cwd(), "delivery-logs.json");
+const SETTINGS_KEY = "delivery_logs";
 
 export interface DeliveryLogEntry {
   id: string;
@@ -19,15 +18,14 @@ export interface DeliveryLogEntry {
 
 function readLogs(): DeliveryLogEntry[] {
   try {
-    if (fs.existsSync(LOG_FILE)) {
-      return JSON.parse(fs.readFileSync(LOG_FILE, "utf8"));
-    }
+    const raw = dbSettingsGet(SETTINGS_KEY);
+    if (raw) return JSON.parse(raw);
   } catch {}
   return [];
 }
 
 function writeLogs(logs: DeliveryLogEntry[]) {
-  fs.writeFileSync(LOG_FILE, JSON.stringify(logs, null, 2));
+  dbSettingsSet(SETTINGS_KEY, JSON.stringify(logs));
 }
 
 export function logDelivery(entry: Omit<DeliveryLogEntry, "id" | "timestamp">): DeliveryLogEntry {

@@ -6,7 +6,7 @@ import bcrypt from "bcryptjs";
 import { v4 as uuidv4 } from "uuid";
 import { storage } from "./storage";
 import { accountManager } from "./accounts";
-import { sendAccountEmail, sendPasswordResetEmail } from "./email";
+import { sendAccountEmail, sendPasswordResetEmail, sendSuspensionEmail, sendUnsuspensionEmail, sendBulkEmail } from "./email";
 import { sendTelegramMessage, notifyNewOrder, notifyNewCustomer, notifyPaymentFailed, isTelegramConfigured } from "./telegram";
 import { getWhatsAppStatus, connectWhatsApp, disconnectWhatsApp, isWhatsAppWebConnected, broadcastNewOrder, sendWhatsAppNotification } from "./whatsapp-web";
 import { subscriptionPlans } from "./plans";
@@ -22,6 +22,9 @@ import {
   createAdminToken,
   validateAdminToken,
   adminAuthMiddleware,
+  generateAdminResetCode,
+  verifyAdminResetCode,
+  clearAdminResetCode,
 } from "./auth";
 import { getPaystackSecretKey, getPaystackPublicKey, getSecretsStatus } from "./secrets";
 import nodemailer from "nodemailer";
@@ -30,6 +33,8 @@ import { getAppConfig, saveAppConfig } from "./app-config";
 import { getCredentialsOverride, saveCredentialsOverride } from "./credentials-store";
 import { logAdminAction, getAdminLogs } from "./admin-logger";
 import { logDelivery, getDeliveryProof, getDeliveryLogs } from "./delivery-log";
+import { getAllAdminUsers, createAdminUser, removeAdminUser, updateAdminUserPassword, sanitizeAdminUser, validateAdminUserPassword } from "./admin-users";
+import { getSupabaseConfig, updateSupabaseConfig, testSupabaseConnection, syncAllCustomers, syncCustomerToSupabase, isSupabaseConfigured } from "./supabase-backup";
 import speakeasy from "speakeasy";
 import QRCode from "qrcode";
 
@@ -397,6 +402,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (transaction.status === "failed") {
         return res.json({ success: false, status: "failed", error: "This transaction has already failed" });
       }
+      if (transaction.status === "cancelled") {
+        const recheck = await verifyPaystackPayment(reference);
+        if (recheck.configured && recheck.success) {
+          await storage.updateTransaction(reference, { status: "pending" });
+          transaction.status = "pending";
+        } else {
+          return res.json({ success: false, status: "cancelled", error: "This transaction was cancelled due to timeout" });
+        }
+      }
 
       const verify = await verifyPaystackPayment(reference);
       if (!verify.configured) {
@@ -501,6 +515,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (!transaction || transaction.status === "success") {
         return res.redirect(`/payment/success?ref=${ref}&plan=${encodeURIComponent(transaction?.planName || "")}`);
       }
+      if (transaction.status === "cancelled") {
+        const recheck = await verifyPaystackPayment(ref);
+        if (recheck.configured && recheck.success) {
+          await storage.updateTransaction(ref, { status: "pending" });
+          transaction.status = "pending";
+        } else {
+          return res.redirect(`/checkout?planId=${transaction.planId}&error=payment_cancelled`);
+        }
+      }
       const verify = await verifyPaystackPayment(ref);
       if (verify.success && verify.configured) {
         const delivery = await deliverAccount(transaction);
@@ -541,13 +564,21 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
       if (reference.startsWith("ct-cart-")) {
         const allTx = await storage.getAllTransactions();
-        const cartTxs = allTx.filter((t) => t.paystackReference === reference && t.status === "pending");
+        const cartTxs = allTx.filter((t) => t.paystackReference === reference && (t.status === "pending" || t.status === "cancelled"));
         for (const tx of cartTxs) {
+          if (tx.status === "cancelled") {
+            await storage.updateTransaction(tx.reference, { status: "pending" });
+            tx.status = "pending";
+          }
           await deliverAccount(tx);
         }
       } else {
         const transaction = await storage.getTransaction(reference);
-        if (transaction && transaction.status === "pending") {
+        if (transaction && (transaction.status === "pending" || transaction.status === "cancelled")) {
+          if (transaction.status === "cancelled") {
+            await storage.updateTransaction(reference, { status: "pending" });
+            transaction.status = "pending";
+          }
           await deliverAccount(transaction);
         }
       }
@@ -598,15 +629,24 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // ─── Admin: Login ─────────────────────────────────────────────────────────
-  app.post("/api/admin/login", (req, res) => {
+  app.post("/api/admin/login", async (req, res) => {
     const { email, password, totpCode } = req.body;
     const ip = req.headers["x-forwarded-for"]?.toString() || req.socket.remoteAddress || "unknown";
     const creds = getAdminCredentials();
-    if (email !== creds.email || password !== creds.password) {
-      logAdminAction({ action: "Login failed — wrong credentials", category: "auth", details: `Email: ${email}`, ip, status: "error" });
-      return res.status(401).json({ success: false, error: "Invalid email or password" });
+    let adminId = "primary";
+    let isPrimaryAdmin = (email === creds.email && password === creds.password);
+
+    if (!isPrimaryAdmin) {
+      const additionalAdmin = await validateAdminUserPassword(email, password);
+      if (additionalAdmin) {
+        adminId = additionalAdmin.id;
+      } else {
+        logAdminAction({ action: "Login failed — wrong credentials", category: "auth", details: `Email: ${email}`, ip, status: "error" });
+        return res.status(401).json({ success: false, error: "Invalid email or password" });
+      }
     }
-    if (isSetupComplete()) {
+
+    if (isPrimaryAdmin && isSetupComplete()) {
       if (!totpCode) {
         return res.status(403).json({ success: false, error: "2FA code required", requiresTotp: true });
       }
@@ -615,9 +655,194 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         return res.status(401).json({ success: false, error: "Invalid 2FA code" });
       }
     }
-    const token = createAdminToken();
-    logAdminAction({ action: "Admin logged in", category: "auth", details: `Email: ${email}`, ip, status: "success" });
-    res.json({ success: true, token });
+    const token = createAdminToken(adminId);
+    const role = adminId === "primary" ? "superadmin" : (getAllAdminUsers().find(u => u.id === adminId)?.role || "admin");
+    logAdminAction({ action: "Admin logged in", category: "auth", details: `Email: ${email}, Role: ${role}`, ip, status: "success" });
+    res.json({ success: true, token, role });
+  });
+
+  // ─── Admin: Forgot Password ─────────────────────────────────────────────
+  const resetRequestTimestamps = new Map<string, number>();
+  app.post("/api/admin/forgot-password", async (req, res) => {
+    try {
+      const { email } = req.body;
+      if (!email) return res.status(400).json({ success: false, error: "Email is required" });
+      const ip = req.headers["x-forwarded-for"]?.toString() || req.socket.remoteAddress || "unknown";
+      const lastRequest = resetRequestTimestamps.get(ip) || 0;
+      if (Date.now() - lastRequest < 60000) {
+        return res.status(429).json({ success: false, error: "Please wait before requesting another code" });
+      }
+      resetRequestTimestamps.set(ip, Date.now());
+      const creds = getAdminCredentials();
+      if (email.toLowerCase() !== creds.email.toLowerCase()) {
+        return res.json({ success: true, message: "If this email is registered, a reset code has been sent" });
+      }
+      const code = generateAdminResetCode();
+      const transporter = nodemailer.createTransport({
+        service: "gmail",
+        auth: { user: getEmailUser(), pass: getEmailPass() },
+      });
+      const senderEmail = getEmailUser();
+      if (!senderEmail) {
+        return res.status(503).json({ success: false, error: "Email service not configured" });
+      }
+      await transporter.sendMail({
+        from: `"Chege Tech Admin" <${senderEmail}>`,
+        to: creds.email,
+        subject: "Admin Password Reset Code",
+        html: `
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+<body style="margin:0;padding:0;background:#f0f4f8;font-family:'Segoe UI',Arial,sans-serif;">
+  <div style="max-width:500px;margin:40px auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.10);">
+    <div style="background:linear-gradient(135deg,#4169E1 0%,#7C3AED 100%);padding:32px;text-align:center;">
+      <h1 style="color:#fff;margin:0 0 6px;font-size:24px;font-weight:700;">Admin Password Reset</h1>
+      <p style="color:rgba(255,255,255,.85);margin:0;font-size:14px;">Chege Tech</p>
+    </div>
+    <div style="padding:32px;text-align:center;">
+      <p style="font-size:14px;color:#555;margin:0 0 28px;">Use the code below to reset your admin password. It expires in <strong>15 minutes</strong>.</p>
+      <div style="background:#1e1b4b;border-radius:12px;padding:24px;margin:0 auto 28px;display:inline-block;">
+        <span style="font-size:40px;font-weight:900;letter-spacing:12px;color:#a5b4fc;font-family:monospace;">${code}</span>
+      </div>
+      <p style="font-size:13px;color:#888;margin:0;">If you didn't request this, your password has NOT been changed. You can safely ignore this email.</p>
+    </div>
+    <div style="background:#f8faff;padding:16px;text-align:center;border-top:1px solid #eee;">
+      <p style="font-size:12px;color:#aaa;margin:0;">&copy; ${new Date().getFullYear()} Chege Tech. All rights reserved.</p>
+    </div>
+  </div>
+</body>
+</html>`,
+      });
+      logAdminAction({ action: "Admin password reset requested", category: "auth", details: `Email: ${email}`, status: "warning" });
+      res.json({ success: true, message: "Reset code sent to admin email" });
+    } catch (err: any) {
+      console.error("[admin] forgot-password error:", err.message);
+      res.status(500).json({ success: false, error: "Failed to send reset code. Please try again." });
+    }
+  });
+
+  // ─── Admin: Reset Password with Code ──────────────────────────────────────
+  app.post("/api/admin/reset-password", (req, res) => {
+    try {
+      const { email, code, newPassword } = req.body;
+      if (!email || !code || !newPassword) return res.status(400).json({ success: false, error: "All fields are required" });
+      if (newPassword.length < 6) return res.status(400).json({ success: false, error: "Password must be at least 6 characters" });
+
+      const creds = getAdminCredentials();
+      if (email.toLowerCase() !== creds.email.toLowerCase()) {
+        return res.status(400).json({ success: false, error: "Invalid reset request" });
+      }
+
+      const resetResult = verifyAdminResetCode(code);
+      if (!resetResult.valid) {
+        return res.status(400).json({ success: false, error: resetResult.error || "Invalid or expired reset code" });
+      }
+
+      saveCredentialsOverride({ adminPassword: newPassword });
+      clearAdminResetCode();
+      logAdminAction({ action: "Admin password reset completed", category: "auth", details: `Email: ${email}`, status: "success" });
+      res.json({ success: true, message: "Password has been reset successfully" });
+    } catch (err: any) {
+      console.error("[admin] reset-password error:", err.message);
+      res.status(500).json({ success: false, error: "Password reset failed. Please try again." });
+    }
+  });
+
+  // ─── Admin: Get current role/identity ─────────────────────────────────────
+  app.get("/api/admin/me", adminAuthMiddleware, (req: any, res) => {
+    const creds = getAdminCredentials();
+    if (req.adminId === "primary") {
+      return res.json({ success: true, admin: { id: "primary", email: creds.email, name: "Super Admin", role: "superadmin" } });
+    }
+    const users = getAllAdminUsers();
+    const user = users.find(u => u.id === req.adminId);
+    if (user) {
+      return res.json({ success: true, admin: sanitizeAdminUser(user) });
+    }
+    res.json({ success: true, admin: { id: req.adminId, email: "unknown", name: "Admin", role: req.adminRole } });
+  });
+
+  // ─── Admin: List admin users ────────────────────────────────────────────
+  app.get("/api/admin/users", adminAuthMiddleware, (req: any, res) => {
+    if (req.adminRole !== "superadmin") return res.status(403).json({ success: false, error: "Only super admins can manage admin users" });
+    const users = getAllAdminUsers().map(sanitizeAdminUser);
+    res.json({ success: true, users });
+  });
+
+  // ─── Admin: Add admin user ─────────────────────────────────────────────
+  app.post("/api/admin/users", adminAuthMiddleware, async (req: any, res) => {
+    if (req.adminRole !== "superadmin") return res.status(403).json({ success: false, error: "Only super admins can add admin users" });
+    try {
+      const { email, name, password } = req.body;
+      if (!email || !password || !name) return res.status(400).json({ success: false, error: "Email, name, and password are required" });
+      if (password.length < 6) return res.status(400).json({ success: false, error: "Password must be at least 6 characters" });
+      const creds = getAdminCredentials();
+      if (email.toLowerCase() === creds.email.toLowerCase()) return res.status(400).json({ success: false, error: "This email is already the primary admin" });
+      const user = await createAdminUser({ email, name, password });
+      logAdminAction({ action: "Admin user added", category: "auth", details: `Email: ${email}, Name: ${name}`, status: "success" });
+      res.json({ success: true, user: sanitizeAdminUser(user) });
+    } catch (err: any) {
+      res.status(400).json({ success: false, error: err.message });
+    }
+  });
+
+  // ─── Admin: Remove admin user ──────────────────────────────────────────
+  app.delete("/api/admin/users/:id", adminAuthMiddleware, (req: any, res) => {
+    if (req.adminRole !== "superadmin") return res.status(403).json({ success: false, error: "Only super admins can remove admin users" });
+    try {
+      const removed = removeAdminUser(req.params.id);
+      if (!removed) return res.status(404).json({ success: false, error: "Admin user not found" });
+      logAdminAction({ action: "Admin user removed", category: "auth", details: `ID: ${req.params.id}`, status: "warning" });
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(400).json({ success: false, error: err.message });
+    }
+  });
+
+  // ─── Admin: Supabase Backup Config ──────────────────────────────────────
+  app.get("/api/admin/supabase-config", adminAuthMiddleware, (req: any, res) => {
+    if (req.adminRole !== "superadmin") return res.status(403).json({ success: false, error: "Access denied" });
+    const cfg = getSupabaseConfig();
+    res.json({ success: true, config: { url: cfg.url, enabled: cfg.enabled, lastSyncAt: cfg.lastSyncAt, lastSyncCount: cfg.lastSyncCount, hasKey: !!cfg.key } });
+  });
+
+  app.put("/api/admin/supabase-config", adminAuthMiddleware, (req: any, res) => {
+    if (req.adminRole !== "superadmin") return res.status(403).json({ success: false, error: "Access denied" });
+    try {
+      const { url, key, enabled } = req.body;
+      const updates: any = {};
+      if (url !== undefined) updates.url = url;
+      if (key !== undefined) updates.key = key;
+      if (enabled !== undefined) updates.enabled = enabled;
+      const cfg = updateSupabaseConfig(updates);
+      logAdminAction({ action: `Supabase backup ${cfg.enabled ? "enabled" : "updated"}`, category: "settings", details: `URL: ${cfg.url || "not set"}`, status: "success" });
+      res.json({ success: true, config: { url: cfg.url, enabled: cfg.enabled, lastSyncAt: cfg.lastSyncAt, lastSyncCount: cfg.lastSyncCount, hasKey: !!cfg.key } });
+    } catch (err: any) {
+      res.status(400).json({ success: false, error: err.message });
+    }
+  });
+
+  app.post("/api/admin/supabase-test", adminAuthMiddleware, async (req: any, res) => {
+    if (req.adminRole !== "superadmin") return res.status(403).json({ success: false, error: "Access denied" });
+    try {
+      const result = await testSupabaseConnection();
+      res.json({ success: true, connected: result.success, error: result.error });
+    } catch (err: any) {
+      res.json({ success: true, connected: false, error: err.message });
+    }
+  });
+
+  app.post("/api/admin/supabase-sync", adminAuthMiddleware, async (req: any, res) => {
+    if (req.adminRole !== "superadmin") return res.status(403).json({ success: false, error: "Access denied" });
+    try {
+      const customers = await storage.getAllCustomers();
+      const result = await syncAllCustomers(customers);
+      logAdminAction({ action: "Supabase sync completed", category: "settings", details: `Synced: ${result.synced}, Errors: ${result.errors}`, status: result.errors > 0 ? "warning" : "success" });
+      res.json({ success: true, ...result });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
   });
 
   // ─── Admin: Get secrets status ────────────────────────────────────────────
@@ -973,6 +1198,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       await storage.createCustomerSession(customer.id, token, expiresAt);
 
       notifyNewCustomer({ name: customer.name || "", email: customer.email }).catch(() => {});
+      syncCustomerToSupabase({ id: customer.id, email: customer.email, name: customer.name, passwordHash: customer.passwordHash, emailVerified: true, createdAt: customer.createdAt }).catch(() => {});
 
       res.json({ success: true, token, customer: { id: customer.id, email: customer.email, name: customer.name } });
     } catch (err: any) {
@@ -1262,9 +1488,155 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.patch("/api/admin/customers/:id/suspend", adminAuthMiddleware, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
-      const { suspended } = req.body;
-      await storage.updateCustomer(id, { suspended: !!suspended });
+      const newSuspended = req.body.suspended === true;
+      const reason = typeof req.body.reason === "string" ? req.body.reason.trim() : undefined;
+      const customer = await storage.getCustomerById(id);
+      if (!customer) return res.status(404).json({ success: false, error: "Customer not found" });
+      if (customer.suspended === newSuspended) return res.json({ success: true, unchanged: true });
+      await storage.updateCustomer(id, { suspended: newSuspended });
+      if (newSuspended) {
+        sendSuspensionEmail(customer.email, customer.name || undefined, reason).catch(() => {});
+      } else {
+        sendUnsuspensionEmail(customer.email, customer.name || undefined).catch(() => {});
+      }
       res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // ─── Admin: Reset customer password ─────────────────────────────────────
+  app.post("/api/admin/customers/:id/reset-password", adminAuthMiddleware, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const customer = await storage.getCustomerById(id);
+      if (!customer) return res.status(404).json({ success: false, error: "Customer not found" });
+
+      const senderUser = getEmailUser();
+      const senderPass = getEmailPass();
+      if (!senderUser || !senderPass) return res.status(503).json({ success: false, error: "Email service not configured. Cannot reset password without email delivery." });
+
+      const newPassword = crypto.randomBytes(4).toString("hex");
+      const transporter = nodemailer.createTransport({ service: "gmail", auth: { user: senderUser, pass: senderPass } });
+      await transporter.sendMail({
+        from: `"Chege Tech" <${senderUser}>`,
+        to: customer.email,
+        subject: "Your Password Has Been Reset",
+        html: `
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:0;background:#f0f4f8;font-family:'Segoe UI',Arial,sans-serif;">
+  <div style="max-width:500px;margin:40px auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.10);">
+    <div style="background:linear-gradient(135deg,#4169E1 0%,#7C3AED 100%);padding:28px;text-align:center;">
+      <h1 style="color:#fff;margin:0;font-size:22px;">Password Reset</h1>
+    </div>
+    <div style="padding:28px;text-align:center;">
+      <p style="font-size:14px;color:#555;margin:0 0 20px;">Hi${customer.name ? ` ${customer.name}` : ""},<br>Your account password has been reset by an administrator.</p>
+      <div style="background:#1e1b4b;border-radius:10px;padding:20px;display:inline-block;margin:0 0 20px;">
+        <p style="color:#a5b4fc;font-size:12px;margin:0 0 6px;">Your New Password</p>
+        <p style="color:#fff;font-size:24px;font-weight:bold;letter-spacing:3px;margin:0;font-family:monospace;">${newPassword}</p>
+      </div>
+      <p style="font-size:13px;color:#888;margin:0;">Please log in and change your password from your profile settings.</p>
+    </div>
+  </div>
+</body></html>`,
+      });
+
+      const passwordHash = await bcrypt.hash(newPassword, 10);
+      await storage.updateCustomer(id, { passwordHash });
+
+      logAdminAction({ action: "Customer password reset", category: "customers", details: `Email: ${customer.email}`, status: "warning" });
+      res.json({ success: true, message: "Password reset and emailed to customer" });
+    } catch (err: any) {
+      console.error("[admin] reset customer password error:", err.message);
+      res.status(500).json({ success: false, error: "Failed to reset password. Please try again." });
+    }
+  });
+
+  // ─── Admin: Disable customer 2FA ──────────────────────────────────────────
+  app.post("/api/admin/customers/:id/disable-2fa", adminAuthMiddleware, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const customer = await storage.getCustomerById(id);
+      if (!customer) return res.status(404).json({ success: false, error: "Customer not found" });
+      if (!customer.totpEnabled) return res.json({ success: true, message: "2FA is already disabled" });
+
+      await storage.updateCustomer(id, { totpEnabled: false, totpSecret: null });
+
+      logAdminAction({ action: "Customer 2FA disabled", category: "customers", details: `Email: ${customer.email}`, status: "warning" });
+
+      const senderUser = getEmailUser();
+      const senderPass = getEmailPass();
+      let emailSent = false;
+      if (senderUser && senderPass) {
+        try {
+          const transporter = nodemailer.createTransport({ service: "gmail", auth: { user: senderUser, pass: senderPass } });
+          await transporter.sendMail({
+            from: `"Chege Tech" <${senderUser}>`,
+            to: customer.email,
+            subject: "Two-Factor Authentication Disabled",
+            html: `
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:0;background:#f0f4f8;font-family:'Segoe UI',Arial,sans-serif;">
+  <div style="max-width:500px;margin:40px auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.10);">
+    <div style="background:linear-gradient(135deg,#4169E1 0%,#7C3AED 100%);padding:28px;text-align:center;">
+      <h1 style="color:#fff;margin:0;font-size:22px;">2FA Disabled</h1>
+    </div>
+    <div style="padding:28px;text-align:center;">
+      <p style="font-size:14px;color:#555;margin:0 0 16px;">Hi${customer.name ? ` ${customer.name}` : ""},<br>Two-factor authentication has been disabled on your account by an administrator.</p>
+      <p style="font-size:13px;color:#888;margin:0;">You can re-enable 2FA anytime from your account settings for added security.</p>
+    </div>
+  </div>
+</body></html>`,
+          });
+          emailSent = true;
+        } catch (emailErr: any) {
+          console.error("[admin] 2FA disable notification email failed:", emailErr.message);
+        }
+      }
+
+      res.json({ success: true, message: emailSent ? "2FA disabled and customer notified" : "2FA disabled (email notification could not be sent)" });
+    } catch (err: any) {
+      console.error("[admin] disable 2FA error:", err.message);
+      res.status(500).json({ success: false, error: "Failed to disable 2FA. Please try again." });
+    }
+  });
+
+  // ─── Admin: Send bulk email ──────────────────────────────────────────────
+  app.post("/api/admin/email-blast", adminAuthMiddleware, async (req, res) => {
+    try {
+      const { subject, content, recipients, filter } = req.body;
+      if (!subject || !content) return res.status(400).json({ success: false, error: "Subject and content are required" });
+
+      let emailList: string[] = [];
+
+      if (recipients && Array.isArray(recipients) && recipients.length > 0) {
+        emailList = recipients;
+      } else {
+        const allCustomers = await storage.getAllCustomers();
+        if (filter === "verified") {
+          emailList = allCustomers.filter((c: any) => c.emailVerified && !c.suspended).map((c: any) => c.email);
+        } else if (filter === "suspended") {
+          emailList = allCustomers.filter((c: any) => c.suspended).map((c: any) => c.email);
+        } else {
+          emailList = allCustomers.filter((c: any) => c.emailVerified).map((c: any) => c.email);
+        }
+      }
+
+      if (emailList.length === 0) return res.status(400).json({ success: false, error: "No recipients found" });
+      if (emailList.length > 500) return res.status(400).json({ success: false, error: "Maximum 500 recipients per blast" });
+
+      const uniqueEmails = [...new Set(emailList.map((e: string) => e.toLowerCase().trim()))].filter(Boolean);
+
+      const htmlContent = content
+        .replace(/\n/g, "<br>")
+        .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
+
+      const result = await sendBulkEmail(uniqueEmails, subject, htmlContent);
+      logAdminAction({ action: "Bulk email sent", category: "email", details: `Subject: "${subject}" — Sent: ${result.sent}, Failed: ${result.failed}`, status: result.failed > 0 ? "warning" : "success" });
+      const success = result.sent > 0;
+      res.json({ success, sent: result.sent, failed: result.failed, total: uniqueEmails.length, errors: result.errors.slice(0, 5) });
     } catch (err: any) {
       res.status(500).json({ success: false, error: err.message });
     }
@@ -1452,6 +1824,79 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     } catch (err: any) {
       res.status(500).json({ success: false, error: err.message });
     }
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // API KEY AUTHENTICATED ENDPOINTS (v1)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  async function apiKeyAuthMiddleware(req: any, res: any, next: any) {
+    const key = req.headers["x-api-key"];
+    if (!key) return res.status(401).json({ error: "Missing X-API-Key header" });
+    const apiKey = await storage.getApiKeyByKey(key);
+    if (!apiKey) return res.status(401).json({ error: "Invalid API key" });
+    if (!apiKey.active) return res.status(403).json({ error: "API key has been revoked" });
+    req.apiKey = apiKey;
+    if (apiKey.customerId) {
+      const customer = await storage.getCustomerById(apiKey.customerId);
+      if (!customer) return res.status(403).json({ error: "Linked customer account not found" });
+      if (customer.suspended) return res.status(403).json({ error: "Account suspended. Contact support." });
+      req.customer = customer;
+    }
+    next();
+  }
+
+  // ─── Customer API: My Profile ──────────────────────────────────────────
+  app.get("/api/v1/my-profile", apiKeyAuthMiddleware, async (req: any, res) => {
+    if (!req.customer) return res.status(403).json({ error: "This API key is not linked to a customer" });
+    const c = req.customer;
+    res.json({ id: c.id, email: c.email, name: c.name, emailVerified: c.emailVerified, createdAt: c.createdAt });
+  });
+
+  // ─── Customer API: My Orders ──────────────────────────────────────────
+  app.get("/api/v1/my-orders", apiKeyAuthMiddleware, async (req: any, res) => {
+    if (!req.customer) return res.status(403).json({ error: "This API key is not linked to a customer" });
+    const orders = await storage.getTransactionsByEmail(req.customer.email);
+    res.json({
+      count: orders.length,
+      orders: orders.map((o: any) => ({
+        reference: o.reference, plan: o.planName, amount: o.amount, status: o.status,
+        accountAssigned: o.accountAssigned, emailSent: o.emailSent, createdAt: o.createdAt,
+      })),
+    });
+  });
+
+  // ─── Admin API: Transactions ──────────────────────────────────────────
+  app.get("/api/v1/admin/transactions", apiKeyAuthMiddleware, async (req: any, res) => {
+    if (req.apiKey.customerId) return res.status(403).json({ error: "Admin API key required (no customer linked)" });
+    const all = await storage.getAllTransactions();
+    res.json({
+      count: all.length,
+      transactions: all.map((t: any) => ({
+        reference: t.reference, customerEmail: t.customerEmail, plan: t.planName,
+        amount: t.amount, status: t.status, accountAssigned: t.accountAssigned,
+        emailSent: t.emailSent, createdAt: t.createdAt,
+      })),
+    });
+  });
+
+  // ─── Admin API: Stats ─────────────────────────────────────────────────
+  app.get("/api/v1/admin/stats", apiKeyAuthMiddleware, async (req: any, res) => {
+    if (req.apiKey.customerId) return res.status(403).json({ error: "Admin API key required (no customer linked)" });
+    const stats = await storage.getStats();
+    res.json(stats);
+  });
+
+  // ─── Admin API: Customers ─────────────────────────────────────────────
+  app.get("/api/v1/admin/customers", apiKeyAuthMiddleware, async (req: any, res) => {
+    if (req.apiKey.customerId) return res.status(403).json({ error: "Admin API key required (no customer linked)" });
+    const customers = await storage.getAllCustomers();
+    res.json({
+      count: customers.length,
+      customers: customers.map((c: any) => ({
+        id: c.id, email: c.email, name: c.name, emailVerified: c.emailVerified, createdAt: c.createdAt,
+      })),
+    });
   });
 
   return httpServer;

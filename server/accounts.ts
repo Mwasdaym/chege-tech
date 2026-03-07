@@ -1,21 +1,19 @@
-import fs from "fs";
-import path from "path";
+import { dbSettingsGet, dbSettingsSet } from "./storage";
 import type { AccountEntry, AccountsData } from "@shared/schema";
 
-const ACCOUNTS_FILE = path.join(process.cwd(), "accounts.json");
+const SETTINGS_KEY = "accounts";
 
 export class AccountManager {
   private accounts: AccountsData;
 
   constructor() {
     this.accounts = {};
-    this.loadAccounts();
   }
 
   private loadAccounts(): void {
     try {
-      if (fs.existsSync(ACCOUNTS_FILE)) {
-        const raw = fs.readFileSync(ACCOUNTS_FILE, "utf8");
+      const raw = dbSettingsGet(SETTINGS_KEY);
+      if (raw) {
         this.accounts = JSON.parse(raw);
         Object.keys(this.accounts).forEach((service) => {
           this.accounts[service].forEach((account) => {
@@ -31,7 +29,6 @@ export class AccountManager {
         });
       } else {
         this.accounts = {};
-        this.saveAccounts();
       }
     } catch {
       this.accounts = {};
@@ -39,7 +36,7 @@ export class AccountManager {
   }
 
   private saveAccounts(): void {
-    fs.writeFileSync(ACCOUNTS_FILE, JSON.stringify(this.accounts, null, 2));
+    dbSettingsSet(SETTINGS_KEY, JSON.stringify(this.accounts));
   }
 
   checkAvailability(planId: string): { available: boolean; message: string; slots?: number } {

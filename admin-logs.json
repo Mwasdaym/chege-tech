@@ -1,0 +1,286 @@
+[
+  {
+    "id": "1771940407357_gsrej",
+    "timestamp": "2026-02-24T13:40:07.357Z",
+    "action": "Bulk upload: 20 accounts added to primevideo_6m",
+    "category": "accounts",
+    "details": "20 added, 0 errors",
+    "status": "success"
+  },
+  {
+    "id": "1771940129874_o9v3w",
+    "timestamp": "2026-02-24T13:35:29.874Z",
+    "action": "Admin logged in",
+    "category": "auth",
+    "details": "Email: johnchege2159@gmail.com",
+    "ip": "154.159.252.10, 10.82.6.48",
+    "status": "success"
+  },
+  {
+    "id": "1771939363418_yqpgf",
+    "timestamp": "2026-02-24T13:22:43.418Z",
+    "action": "Login failed — wrong credentials",
+    "category": "auth",
+    "details": "Email: admin@example.com",
+    "ip": "154.159.252.10, 10.82.12.137",
+    "status": "error"
+  },
+  {
+    "id": "1771938356764_mwjhg",
+    "timestamp": "2026-02-24T13:05:56.764Z",
+    "action": "WhatsApp connection initiated",
+    "category": "settings",
+    "status": "success"
+  },
+  {
+    "id": "1771937887498_wym4h",
+    "timestamp": "2026-02-24T12:58:07.498Z",
+    "action": "WhatsApp disconnected",
+    "category": "settings",
+    "status": "warning"
+  },
+  {
+    "id": "1771937864437_w66q8",
+    "timestamp": "2026-02-24T12:57:44.437Z",
+    "action": "WhatsApp connection initiated",
+    "category": "settings",
+    "status": "success"
+  },
+  {
+    "id": "1771937791376_22jov",
+    "timestamp": "2026-02-24T12:56:31.376Z",
+    "action": "WhatsApp connection initiated",
+    "category": "settings",
+    "status": "success"
+  },
+  {
+    "id": "1771937786475_2o79d",
+    "timestamp": "2026-02-24T12:56:26.475Z",
+    "action": "WhatsApp disconnected",
+    "category": "settings",
+    "status": "warning"
+  },
+  {
+    "id": "1771937717140_kn6xq",
+    "timestamp": "2026-02-24T12:55:17.140Z",
+    "action": "WhatsApp connection initiated",
+    "category": "settings",
+    "status": "success"
+  },
+  {
+    "id": "1771937709201_a47a3",
+    "timestamp": "2026-02-24T12:55:09.201Z",
+    "action": "WhatsApp connection initiated",
+    "category": "settings",
+    "status": "success"
+  },
+  {
+    "id": "1771937680366_u24yx",
+    "timestamp": "2026-02-24T12:54:40.366Z",
+    "action": "WhatsApp connection initiated",
+    "category": "settings",
+    "status": "success"
+  },
+  {
+    "id": "1771937660212_24iu3",
+    "timestamp": "2026-02-24T12:54:20.212Z",
+    "action": "WhatsApp connection initiated",
+    "category": "settings",
+    "status": "success"
+  },
+  {
+    "id": "1771937627428_h10pd",
+    "timestamp": "2026-02-24T12:53:47.428Z",
+    "action": "WhatsApp connection initiated",
+    "category": "settings",
+    "status": "success"
+  },
+  {
+    "id": "1771937606001_aee78",
+    "timestamp": "2026-02-24T12:53:26.001Z",
+    "action": "WhatsApp connection initiated",
+    "category": "settings",
+    "status": "success"
+  },
+  {
+    "id": "1771937591433_ovv7i",
+    "timestamp": "2026-02-24T12:53:11.433Z",
+    "action": "WhatsApp connection initiated",
+    "category": "settings",
+    "status": "success"
+  },
+  {
+    "id": "1771937588515_46qiw",
+    "timestamp": "2026-02-24T12:53:08.515Z",
+    "action": "WhatsApp connection initiated",
+    "category": "settings",
+    "status": "success"
+  },
+  {
+    "id": "1771937578399_qnkij",
+    "timestamp": "2026-02-24T12:52:58.399Z",
+    "action": "WhatsApp connection initiated",
+    "category": "settings",
+    "status": "success"
+  },
+  {
+    "id": "1771937570779_9yvb0",
+    "timestamp": "2026-02-24T12:52:50.779Z",
+    "action": "WhatsApp connection initiated",
+    "category": "settings",
+    "status": "success"
+  },
+  {
+    "id": "1771937499334_rywll",
+    "timestamp": "2026-02-24T12:51:39.334Z",
+    "action": "WhatsApp connection initiated",
+    "category": "settings",
+    "status": "success"
+  },
+  {
+    "id": "1771937460873_jrtx3",
+    "timestamp": "2026-02-24T12:51:00.873Z",
+    "action": "WhatsApp disconnected",
+    "category": "settings",
+    "status": "warning"
+  },
+  {
+    "id": "1771937386560_npcbh",
+    "timestamp": "2026-02-24T12:49:46.560Z",
+    "action": "WhatsApp connection initiated",
+    "category": "settings",
+    "status": "success"
+  },
+  {
+    "id": "1771937346234_vayys",
+    "timestamp": "2026-02-24T12:49:06.234Z",
+    "action": "WhatsApp disconnected",
+    "category": "settings",
+    "status": "warning"
+  },
+  {
+    "id": "1771937237278_v7zgw",
+    "timestamp": "2026-02-24T12:47:17.278Z",
+    "action": "WhatsApp connection initiated",
+    "category": "settings",
+    "status": "success"
+  },
+  {
+    "id": "1771937224285_9w60o",
+    "timestamp": "2026-02-24T12:47:04.285Z",
+    "action": "WhatsApp disconnected",
+    "category": "settings",
+    "status": "warning"
+  },
+  {
+    "id": "1771937137899_6r7rd",
+    "timestamp": "2026-02-24T12:45:37.899Z",
+    "action": "WhatsApp connection initiated",
+    "category": "settings",
+    "status": "success"
+  },
+  {
+    "id": "1771936251331_5fy2o",
+    "timestamp": "2026-02-24T12:30:51.331Z",
+    "action": "Admin logged in",
+    "category": "auth",
+    "details": "Email: johnchege2159@gmail.com",
+    "ip": "154.159.252.10, 10.82.5.76",
+    "status": "success"
+  },
+  {
+    "id": "1771936216640_8xtox",
+    "timestamp": "2026-02-24T12:30:16.640Z",
+    "action": "Login failed — wrong credentials",
+    "category": "auth",
+    "details": "Email: admin@example.com",
+    "ip": "154.159.252.10, 10.82.5.76",
+    "status": "error"
+  },
+  {
+    "id": "1771935610932_dcql2",
+    "timestamp": "2026-02-24T12:20:10.932Z",
+    "action": "Telegram test message sent",
+    "category": "settings",
+    "status": "success"
+  },
+  {
+    "id": "1771935480100_ywo4g",
+    "timestamp": "2026-02-24T12:18:00.100Z",
+    "action": "Admin logged in",
+    "category": "auth",
+    "details": "Email: johnchege2159@gmail.com",
+    "ip": "154.159.252.10, 10.82.10.88",
+    "status": "success"
+  },
+  {
+    "id": "1771935442955_gnat1",
+    "timestamp": "2026-02-24T12:17:22.955Z",
+    "action": "Credentials updated",
+    "category": "settings",
+    "details": "Updated: adminEmail, adminPassword",
+    "status": "success"
+  },
+  {
+    "id": "1771935170062_9zddy",
+    "timestamp": "2026-02-24T12:12:50.062Z",
+    "action": "Admin logged in",
+    "category": "auth",
+    "details": "Email: admin@example.com",
+    "ip": "154.159.252.10, 10.82.4.57",
+    "status": "success"
+  },
+  {
+    "id": "1771930933719_ks995",
+    "timestamp": "2026-02-24T11:02:13.719Z",
+    "action": "Telegram test message sent",
+    "category": "settings",
+    "status": "success"
+  },
+  {
+    "id": "1771930164870_k3p5o",
+    "timestamp": "2026-02-24T10:49:24.870Z",
+    "action": "Credentials updated",
+    "category": "settings",
+    "details": "Updated: paystackSecretKey, telegramBotToken",
+    "status": "success"
+  },
+  {
+    "id": "1771929917622_u093d",
+    "timestamp": "2026-02-24T10:45:17.622Z",
+    "action": "Credentials updated",
+    "category": "settings",
+    "details": "Updated: paystackPublicKey, paystackSecretKey",
+    "status": "success"
+  },
+  {
+    "id": "1771929878811_uyave",
+    "timestamp": "2026-02-24T10:44:38.811Z",
+    "action": "Telegram test message sent",
+    "category": "settings",
+    "status": "success"
+  },
+  {
+    "id": "1771929511488_oen3e",
+    "timestamp": "2026-02-24T10:38:31.488Z",
+    "action": "Telegram test message sent",
+    "category": "settings",
+    "status": "success"
+  },
+  {
+    "id": "1771929485668_lv6oe",
+    "timestamp": "2026-02-24T10:38:05.668Z",
+    "action": "Credentials updated",
+    "category": "settings",
+    "details": "Updated: telegramBotToken, telegramChatId",
+    "status": "success"
+  },
+  {
+    "id": "1771929211688_3ns1y",
+    "timestamp": "2026-02-24T10:33:31.688Z",
+    "action": "Credentials updated",
+    "category": "settings",
+    "details": "Updated: paystackPublicKey, paystackSecretKey",
+    "status": "success"
+  }
+]

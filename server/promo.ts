@@ -1,7 +1,6 @@
-import fs from "fs";
-import path from "path";
+import { dbSettingsGet, dbSettingsSet } from "./storage";
 
-const PROMO_FILE = path.join(process.cwd(), "promo-codes.json");
+const SETTINGS_KEY = "promo_codes";
 
 export interface PromoCode {
   code: string;
@@ -21,13 +20,15 @@ export class PromoManager {
 
   constructor() {
     this.codes = [];
-    this.load();
   }
 
   private load(): void {
     try {
-      if (fs.existsSync(PROMO_FILE)) {
-        this.codes = JSON.parse(fs.readFileSync(PROMO_FILE, "utf8"));
+      const raw = dbSettingsGet(SETTINGS_KEY);
+      if (raw) {
+        this.codes = JSON.parse(raw);
+      } else {
+        this.codes = [];
       }
     } catch {
       this.codes = [];
@@ -35,7 +36,7 @@ export class PromoManager {
   }
 
   private save(): void {
-    fs.writeFileSync(PROMO_FILE, JSON.stringify(this.codes, null, 2));
+    dbSettingsSet(SETTINGS_KEY, JSON.stringify(this.codes));
   }
 
   getAll(): PromoCode[] {

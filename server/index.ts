@@ -2,7 +2,7 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
-import { initializeDatabase, storage } from "./storage";
+import { initializeDatabase, migrateJsonToDb, storage } from "./storage";
 
 const app = express();
 app.set("trust proxy", 1);
@@ -62,12 +62,22 @@ app.use((req, res, next) => {
 });
 
 (async () => {
-  initializeDatabase();
+  await initializeDatabase();
+  await migrateJsonToDb();
 
   storage.deleteExpiredSessions().catch(() => {});
   setInterval(() => {
     storage.deleteExpiredSessions().catch(() => {});
   }, 60 * 60 * 1000);
+
+  storage.cancelExpiredTransactions(10).then((count) => {
+    if (count > 0) log(`[startup] Cancelled ${count} expired pending transaction(s)`);
+  }).catch(() => {});
+  setInterval(() => {
+    storage.cancelExpiredTransactions(10).then((count) => {
+      if (count > 0) log(`Cancelled ${count} expired pending transaction(s)`);
+    }).catch(() => {});
+  }, 2 * 60 * 1000);
 
   await registerRoutes(httpServer, app);
 

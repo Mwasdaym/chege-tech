@@ -1,0 +1,14 @@
+{
+  "netflix": {
+    "disabled": true
+  },
+  "primevideo": {
+    "disabled": true
+  },
+  "primevideo_3m": {
+    "disabled": true
+  },
+  "custom_1771922181905_b8pv3r": {
+    "priceOverride": 250
+  }
+}

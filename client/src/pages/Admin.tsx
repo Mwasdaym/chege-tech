@@ -10,7 +10,7 @@ import {
   Save, X, BadgePercent, Star, RotateCcw, Zap, Settings,
   CreditCard, AlertTriangle, Lock, Unlock, Copy, Activity,
   Terminal, Info, TriangleAlert, Filter, Upload, Download,
-  Search, BarChart2, Loader2, FileCheck, ClipboardCheck
+  Search, BarChart2, Loader2, FileCheck, ClipboardCheck, Send
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,7 +20,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Switch } from "@/components/ui/switch";
 
-type Tab = "dashboard" | "plans" | "accounts" | "promos" | "transactions" | "apikeys" | "customers" | "logs" | "settings";
+type Tab = "dashboard" | "plans" | "accounts" | "promos" | "transactions" | "apikeys" | "customers" | "emailblast" | "logs" | "settings";
 
 const STATUS_CONFIG: Record<string, { label: string; icon: any; color: string }> = {
   success: { label: "Completed", icon: CheckCircle, color: "text-emerald-400" },
@@ -98,6 +98,7 @@ export default function Admin() {
             { id: "transactions", label: "Transactions", icon: ArrowLeftRight },
             { id: "apikeys", label: "API Keys", icon: Key },
             { id: "customers", label: "Customers", icon: Users },
+            { id: "emailblast", label: "Email Blast", icon: Send },
             { id: "logs", label: "Activity Logs", icon: Activity },
             { id: "settings", label: "Settings", icon: Settings },
           ] as { id: Tab; label: string; icon: any }[]).map(({ id, label, icon: Icon }) => (
@@ -145,6 +146,7 @@ export default function Admin() {
           {activeTab === "transactions" && <TransactionsTab />}
           {activeTab === "apikeys" && <ApiKeysTab />}
           {activeTab === "customers" && <CustomersTab />}
+          {activeTab === "emailblast" && <EmailBlastTab />}
           {activeTab === "logs" && <LogsTab />}
           {activeTab === "settings" && <SettingsTab />}
         </div>
@@ -161,6 +163,12 @@ function LoginFlow({ onLogin }: { onLogin: (token: string) => void }) {
   const [loginError, setLoginError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [, setLocation] = useLocation();
+  const { toast } = useToast();
+  const [resetMode, setResetMode] = useState<"none" | "email" | "code">("none");
+  const [resetEmail, setResetEmail] = useState("");
+  const [resetCode, setResetCode] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmNewPassword, setConfirmNewPassword] = useState("");
 
   const { data: statusData } = useQuery<{ setupComplete: boolean }>({
     queryKey: ["/api/admin/2fa-status"],
@@ -192,9 +200,65 @@ function LoginFlow({ onLogin }: { onLogin: (token: string) => void }) {
     }
   }
 
+  async function handleForgotPassword(e: React.FormEvent) {
+    e.preventDefault();
+    if (!resetEmail.trim()) return;
+    setIsLoading(true);
+    setLoginError("");
+    try {
+      const res = await fetch("/api/admin/forgot-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: resetEmail.trim() }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setResetMode("code");
+        toast({ title: "Check your email", description: "A 6-digit reset code has been sent" });
+      } else {
+        setLoginError(data.error || "Failed to send reset code");
+      }
+    } catch {
+      setLoginError("Connection error");
+    } finally { setIsLoading(false); }
+  }
+
+  async function handleResetPassword(e: React.FormEvent) {
+    e.preventDefault();
+    if (newPassword !== confirmNewPassword) {
+      setLoginError("Passwords don't match");
+      return;
+    }
+    if (newPassword.length < 6) {
+      setLoginError("Password must be at least 6 characters");
+      return;
+    }
+    setIsLoading(true);
+    setLoginError("");
+    try {
+      const res = await fetch("/api/admin/reset-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: resetEmail.trim(), code: resetCode.trim(), newPassword }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast({ title: "Password reset!", description: "You can now log in with your new password" });
+        setResetMode("none");
+        setResetEmail("");
+        setResetCode("");
+        setNewPassword("");
+        setConfirmNewPassword("");
+      } else {
+        setLoginError(data.error || "Reset failed");
+      }
+    } catch {
+      setLoginError("Connection error");
+    } finally { setIsLoading(false); }
+  }
+
   return (
     <div className="min-h-screen bg-background flex items-center justify-center px-4 relative overflow-hidden">
-      {/* Background orbs */}
       <div className="fixed inset-0 pointer-events-none">
         <div className="bg-orb w-[600px] h-[600px] bg-indigo-600 top-[-200px] left-[-150px]" style={{ opacity: 0.35 }} />
         <div className="bg-orb w-[500px] h-[500px] bg-violet-700 bottom-[-150px] right-[-100px]" style={{ opacity: 0.30 }} />
@@ -206,79 +270,180 @@ function LoginFlow({ onLogin }: { onLogin: (token: string) => void }) {
           <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center mx-auto mb-5 shadow-2xl" style={{ boxShadow: "0 0 40px rgba(99,102,241,0.4)" }}>
             <Shield className="w-8 h-8 text-white" />
           </div>
-          <h1 className="text-2xl font-bold text-white mb-1">Admin Login</h1>
-          <p className="text-white/40 text-sm">Secure admin access</p>
+          <h1 className="text-2xl font-bold text-white mb-1">
+            {resetMode === "none" ? "Admin Login" : resetMode === "email" ? "Reset Password" : "Enter Reset Code"}
+          </h1>
+          <p className="text-white/40 text-sm">
+            {resetMode === "none" ? "Secure admin access" : resetMode === "email" ? "Enter your admin email" : "Check your email for the code"}
+          </p>
         </div>
 
         <div className="glass-card rounded-2xl p-6">
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(handleLogin)} className="space-y-4">
-              <FormField control={form.control} name="email" render={({ field }) => (
-                <FormItem>
-                  <FormLabel className="text-white/60 text-xs uppercase tracking-wider">Email</FormLabel>
-                  <FormControl>
-                    <Input {...field} type="email" placeholder="admin@example.com" autoComplete="email"
-                      className="glass border-white/10 bg-white/5 text-white placeholder:text-white/25 focus:border-indigo-500/50"
-                      data-testid="input-admin-email" />
-                  </FormControl>
-                </FormItem>
-              )} />
+          {resetMode === "none" && (
+            <>
+              <Form {...form}>
+                <form onSubmit={form.handleSubmit(handleLogin)} className="space-y-4">
+                  <FormField control={form.control} name="email" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-white/60 text-xs uppercase tracking-wider">Email</FormLabel>
+                      <FormControl>
+                        <Input {...field} type="email" placeholder="admin@example.com" autoComplete="email"
+                          className="glass border-white/10 bg-white/5 text-white placeholder:text-white/25 focus:border-indigo-500/50"
+                          data-testid="input-admin-email" />
+                      </FormControl>
+                    </FormItem>
+                  )} />
 
-              <FormField control={form.control} name="password" render={({ field }) => (
-                <FormItem>
-                  <FormLabel className="text-white/60 text-xs uppercase tracking-wider">Password</FormLabel>
-                  <FormControl>
-                    <div className="relative">
-                      <Input {...field} type={showPwd ? "text" : "password"} placeholder="••••••••" autoComplete="current-password"
-                        className="glass border-white/10 bg-white/5 text-white placeholder:text-white/25 focus:border-indigo-500/50 pr-10"
-                        data-testid="input-admin-password" />
-                      <button type="button" onClick={() => setShowPwd(!showPwd)} className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60 transition-colors">
-                        {showPwd ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                      </button>
+                  <FormField control={form.control} name="password" render={({ field }) => (
+                    <FormItem>
+                      <div className="flex items-center justify-between">
+                        <FormLabel className="text-white/60 text-xs uppercase tracking-wider">Password</FormLabel>
+                        <button
+                          type="button"
+                          onClick={() => { setResetMode("email"); setLoginError(""); }}
+                          className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors"
+                          data-testid="link-forgot-password"
+                        >
+                          Forgot password?
+                        </button>
+                      </div>
+                      <FormControl>
+                        <div className="relative">
+                          <Input {...field} type={showPwd ? "text" : "password"} placeholder="••••••••" autoComplete="current-password"
+                            className="glass border-white/10 bg-white/5 text-white placeholder:text-white/25 focus:border-indigo-500/50 pr-10"
+                            data-testid="input-admin-password" />
+                          <button type="button" onClick={() => setShowPwd(!showPwd)} className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60 transition-colors">
+                            {showPwd ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                          </button>
+                        </div>
+                      </FormControl>
+                    </FormItem>
+                  )} />
+
+                  {setupComplete && (
+                    <FormField control={form.control} name="totpCode" render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-white/60 text-xs uppercase tracking-wider flex items-center gap-1.5">
+                          <Key className="w-3 h-3" />Authenticator Code
+                        </FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="000000" maxLength={6} inputMode="numeric"
+                            className="glass border-white/10 bg-white/5 text-white placeholder:text-white/25 text-center font-mono text-xl tracking-[0.5em] focus:border-indigo-500/50"
+                            data-testid="input-totp" />
+                        </FormControl>
+                      </FormItem>
+                    )} />
+                  )}
+
+                  {loginError && (
+                    <div className="flex items-center gap-2 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-sm text-red-400">
+                      <AlertTriangle className="w-4 h-4 shrink-0" />
+                      {loginError}
                     </div>
-                  </FormControl>
-                </FormItem>
-              )} />
+                  )}
 
-              {setupComplete && (
-                <FormField control={form.control} name="totpCode" render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-white/60 text-xs uppercase tracking-wider flex items-center gap-1.5">
-                      <Key className="w-3 h-3" />Authenticator Code
-                    </FormLabel>
-                    <FormControl>
-                      <Input {...field} placeholder="000000" maxLength={6} inputMode="numeric"
-                        className="glass border-white/10 bg-white/5 text-white placeholder:text-white/25 text-center font-mono text-xl tracking-[0.5em] focus:border-indigo-500/50"
-                        data-testid="input-totp" />
-                    </FormControl>
-                  </FormItem>
-                )} />
-              )}
+                  <Button type="submit" disabled={isLoading}
+                    className="w-full bg-gradient-to-r from-indigo-600 to-violet-600 border-0 text-white font-semibold h-11 shadow-lg hover:opacity-90 transition-opacity mt-2"
+                    style={{ boxShadow: "0 0 20px rgba(99,102,241,0.3)" }}
+                    data-testid="button-login">
+                    {isLoading ? (
+                      <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />Logging in...</>
+                    ) : "Login"}
+                  </Button>
+                </form>
+              </Form>
 
-              {loginError && (
-                <div className="flex items-center gap-2 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-sm text-red-400">
-                  <AlertTriangle className="w-4 h-4 shrink-0" />
-                  {loginError}
+              {!setupComplete && (
+                <div className="mt-4 pt-4 border-t border-white/8">
+                  <p className="text-xs text-white/30 text-center">
+                    2FA not set up — configure it inside the admin panel after logging in
+                  </p>
                 </div>
               )}
+            </>
+          )}
 
-              <Button type="submit" disabled={isLoading}
-                className="w-full bg-gradient-to-r from-indigo-600 to-violet-600 border-0 text-white font-semibold h-11 shadow-lg hover:opacity-90 transition-opacity mt-2"
-                style={{ boxShadow: "0 0 20px rgba(99,102,241,0.3)" }}
-                data-testid="button-login">
-                {isLoading ? (
-                  <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />Logging in...</>
-                ) : "Login"}
+          {resetMode === "email" && (
+            <form onSubmit={handleForgotPassword} className="space-y-4">
+              <div>
+                <label className="text-white/60 text-xs uppercase tracking-wider block mb-1.5">Admin Email</label>
+                <Input
+                  type="email"
+                  value={resetEmail}
+                  onChange={(e) => setResetEmail(e.target.value)}
+                  placeholder="admin@example.com"
+                  className="glass border-white/10 bg-white/5 text-white placeholder:text-white/25 focus:border-indigo-500/50"
+                  data-testid="input-reset-email"
+                />
+              </div>
+              {loginError && (
+                <div className="flex items-center gap-2 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-sm text-red-400">
+                  <AlertTriangle className="w-4 h-4 shrink-0" />{loginError}
+                </div>
+              )}
+              <Button type="submit" disabled={isLoading || !resetEmail.trim()}
+                className="w-full bg-gradient-to-r from-indigo-600 to-violet-600 border-0 text-white font-semibold h-11"
+                data-testid="button-send-reset-code">
+                {isLoading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Sending...</> : <><Mail className="w-4 h-4 mr-2" />Send Reset Code</>}
               </Button>
+              <button type="button" onClick={() => { setResetMode("none"); setLoginError(""); }}
+                className="w-full text-center text-sm text-white/40 hover:text-white/70 transition-colors mt-1" data-testid="link-back-to-login">
+                Back to Login
+              </button>
             </form>
-          </Form>
+          )}
 
-          {!setupComplete && (
-            <div className="mt-4 pt-4 border-t border-white/8">
-              <p className="text-xs text-white/30 text-center">
-                2FA not set up — configure it inside the admin panel after logging in
-              </p>
-            </div>
+          {resetMode === "code" && (
+            <form onSubmit={handleResetPassword} className="space-y-4">
+              <div>
+                <label className="text-white/60 text-xs uppercase tracking-wider block mb-1.5">Reset Code</label>
+                <Input
+                  value={resetCode}
+                  onChange={(e) => setResetCode(e.target.value)}
+                  placeholder="000000"
+                  maxLength={6}
+                  inputMode="numeric"
+                  className="glass border-white/10 bg-white/5 text-white placeholder:text-white/25 text-center font-mono text-xl tracking-[0.5em] focus:border-indigo-500/50"
+                  data-testid="input-reset-code"
+                />
+              </div>
+              <div>
+                <label className="text-white/60 text-xs uppercase tracking-wider block mb-1.5">New Password</label>
+                <Input
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="glass border-white/10 bg-white/5 text-white placeholder:text-white/25 focus:border-indigo-500/50"
+                  data-testid="input-new-password"
+                />
+              </div>
+              <div>
+                <label className="text-white/60 text-xs uppercase tracking-wider block mb-1.5">Confirm New Password</label>
+                <Input
+                  type="password"
+                  value={confirmNewPassword}
+                  onChange={(e) => setConfirmNewPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="glass border-white/10 bg-white/5 text-white placeholder:text-white/25 focus:border-indigo-500/50"
+                  data-testid="input-confirm-new-password"
+                />
+              </div>
+              {loginError && (
+                <div className="flex items-center gap-2 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-sm text-red-400">
+                  <AlertTriangle className="w-4 h-4 shrink-0" />{loginError}
+                </div>
+              )}
+              <Button type="submit" disabled={isLoading || !resetCode.trim() || !newPassword || !confirmNewPassword}
+                className="w-full bg-gradient-to-r from-indigo-600 to-violet-600 border-0 text-white font-semibold h-11"
+                data-testid="button-reset-password">
+                {isLoading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Resetting...</> : <><Lock className="w-4 h-4 mr-2" />Reset Password</>}
+              </Button>
+              <button type="button" onClick={() => { setResetMode("none"); setLoginError(""); }}
+                className="w-full text-center text-sm text-white/40 hover:text-white/70 transition-colors mt-1" data-testid="link-back-to-login-2">
+                Back to Login
+              </button>
+            </form>
           )}
         </div>
 
@@ -297,7 +462,14 @@ function LoginFlow({ onLogin }: { onLogin: (token: string) => void }) {
 // ═══════════════════════════════════════════════════════════════
 function SettingsTab() {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const inputCls = "glass border-white/10 bg-white/5 text-white placeholder:text-white/25 focus:border-indigo-500/50";
+
+  const { data: meData } = useQuery<{ admin: { id: string; role: string } }>({
+    queryKey: ["/api/admin/me"],
+    queryFn: () => authFetch("/api/admin/me"),
+  });
+  const isSuperAdmin = meData?.admin?.role === "superadmin";
 
   const { data: secretsData } = useQuery<{ secrets: any }>({
     queryKey: ["/api/admin/secrets"],
@@ -440,6 +612,12 @@ function SettingsTab() {
         {/* ─── Credentials Editor ─────────────────────────── */}
         <CredentialsEditor inputCls={inputCls} />
 
+        {/* ─── Admin Users Management ──────────────────────── */}
+        {isSuperAdmin && <AdminUsersSection inputCls={inputCls} />}
+
+        {/* ─── Supabase Backup ─────────────────────────────── */}
+        {isSuperAdmin && <SupabaseBackupSection inputCls={inputCls} />}
+
         {/* ─── 2FA ─────────────────────────────────────────── */}
         <div className="glass-card rounded-2xl overflow-hidden">
           <div className="p-5 border-b border-white/8">
@@ -544,6 +722,274 @@ function SettingsTab() {
 
       </div>
     </>
+  );
+}
+
+function AdminUsersSection({ inputCls }: { inputCls: string }) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [showAdd, setShowAdd] = useState(false);
+  const [newAdmin, setNewAdmin] = useState({ email: "", name: "", password: "" });
+  const [showPwd, setShowPwd] = useState(false);
+
+  const { data, isLoading } = useQuery<{ users: any[] }>({
+    queryKey: ["/api/admin/users"],
+    queryFn: () => authFetch("/api/admin/users"),
+  });
+  const users = data?.users || [];
+
+  const addMutation = useMutation({
+    mutationFn: () => authFetch("/api/admin/users", { method: "POST", body: JSON.stringify(newAdmin) }),
+    onSuccess: (d) => {
+      if (d.success) {
+        toast({ title: "Admin added", description: d.user.email });
+        setNewAdmin({ email: "", name: "", password: "" });
+        setShowAdd(false);
+        queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
+      } else toast({ title: "Error", description: d.error, variant: "destructive" });
+    },
+  });
+
+  const removeMutation = useMutation({
+    mutationFn: (id: string) => authFetch(`/api/admin/users/${id}`, { method: "DELETE" }),
+    onSuccess: (d) => {
+      if (d.success) {
+        toast({ title: "Admin removed" });
+        queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
+      } else toast({ title: "Error", description: d.error, variant: "destructive" });
+    },
+  });
+
+  return (
+    <div className="glass-card rounded-2xl overflow-hidden">
+      <div className="p-5 border-b border-white/8 flex items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-blue-600/20 flex items-center justify-center">
+            <Users className="w-5 h-5 text-blue-400" />
+          </div>
+          <div>
+            <p className="font-semibold text-white">Admin Users</p>
+            <p className="text-xs text-white/40">Add or remove admin accounts</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <Badge className="glass border-white/10 text-white/50 text-xs">{users.length} added</Badge>
+          <Button size="sm" onClick={() => setShowAdd(!showAdd)}
+            className="bg-gradient-to-r from-blue-600 to-indigo-600 border-0 text-white text-xs h-7 px-2.5"
+            data-testid="button-add-admin">
+            <Plus className="w-3 h-3 mr-1" />{showAdd ? "Cancel" : "Add Admin"}
+          </Button>
+        </div>
+      </div>
+      <div className="p-5 space-y-3">
+        {showAdd && (
+          <div className="glass rounded-xl p-4 space-y-3 border border-blue-500/15">
+            <p className="text-xs text-white/60 font-semibold uppercase tracking-wider">New Admin</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-white/40 block mb-1">Name</label>
+                <Input value={newAdmin.name} onChange={(e) => setNewAdmin(p => ({ ...p, name: e.target.value }))}
+                  placeholder="John Doe" className={inputCls} data-testid="input-new-admin-name" />
+              </div>
+              <div>
+                <label className="text-xs text-white/40 block mb-1">Email</label>
+                <Input value={newAdmin.email} onChange={(e) => setNewAdmin(p => ({ ...p, email: e.target.value }))}
+                  placeholder="admin@example.com" type="email" className={inputCls} data-testid="input-new-admin-email" />
+              </div>
+            </div>
+            <div>
+              <label className="text-xs text-white/40 block mb-1">Password</label>
+              <div className="relative">
+                <Input value={newAdmin.password} onChange={(e) => setNewAdmin(p => ({ ...p, password: e.target.value }))}
+                  type={showPwd ? "text" : "password"} placeholder="Min 6 characters" className={inputCls + " pr-9"}
+                  data-testid="input-new-admin-password" />
+                <button type="button" onClick={() => setShowPwd(!showPwd)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60">
+                  {showPwd ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                </button>
+              </div>
+            </div>
+            <Button onClick={() => addMutation.mutate()} disabled={addMutation.isPending || !newAdmin.email || !newAdmin.name || !newAdmin.password}
+              className="bg-gradient-to-r from-blue-600 to-indigo-600 border-0 text-white text-xs h-8 px-3"
+              data-testid="button-confirm-add-admin">
+              {addMutation.isPending ? "Adding..." : "Add Admin User"}
+            </Button>
+          </div>
+        )}
+
+        <div className="flex items-center gap-2 p-2.5 rounded-xl glass border border-emerald-500/15">
+          <div className="w-8 h-8 rounded-lg bg-emerald-600/20 flex items-center justify-center">
+            <Shield className="w-4 h-4 text-emerald-400" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm text-white font-medium">You (Super Admin)</p>
+            <p className="text-xs text-white/40">Primary account - cannot be removed</p>
+          </div>
+          <Badge className="bg-emerald-600/80 text-white border-0 text-[10px]">Super Admin</Badge>
+        </div>
+
+        {isLoading && <p className="text-xs text-white/30 text-center py-2">Loading...</p>}
+
+        {users.map((user: any) => (
+          <div key={user.id} className="flex items-center gap-2 p-2.5 rounded-xl glass border border-white/8" data-testid={`admin-user-${user.id}`}>
+            <div className="w-8 h-8 rounded-lg bg-blue-600/20 flex items-center justify-center">
+              <Users className="w-4 h-4 text-blue-400" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm text-white font-medium truncate">{user.name}</p>
+              <p className="text-xs text-white/40 truncate">{user.email}</p>
+            </div>
+            <Badge className="glass border-white/10 text-white/50 text-[10px]">Admin</Badge>
+            <Button size="sm" variant="ghost" onClick={() => { if (confirm(`Remove admin ${user.email}?`)) removeMutation.mutate(user.id); }}
+              className="text-red-400 hover:text-red-300 hover:bg-red-500/10 h-7 w-7 p-0"
+              data-testid={`button-remove-admin-${user.id}`}>
+              <Trash2 className="w-3.5 h-3.5" />
+            </Button>
+          </div>
+        ))}
+
+        {!isLoading && users.length === 0 && !showAdd && (
+          <p className="text-xs text-white/25 text-center py-1">No additional admins. Click "Add Admin" to invite team members.</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function SupabaseBackupSection({ inputCls }: { inputCls: string }) {
+  const { toast } = useToast();
+  const [showKey, setShowKey] = useState(false);
+  const [url, setUrl] = useState("");
+  const [key, setKey] = useState("");
+  const [dirty, setDirty] = useState(false);
+
+  const { data, refetch } = useQuery<{ config: any }>({
+    queryKey: ["/api/admin/supabase-config"],
+    queryFn: () => authFetch("/api/admin/supabase-config"),
+  });
+  const cfg = data?.config;
+  if (cfg && !dirty && !url && !key) {
+    if (cfg.url && url !== cfg.url) setUrl(cfg.url);
+  }
+
+  const saveMutation = useMutation({
+    mutationFn: () => authFetch("/api/admin/supabase-config", {
+      method: "PUT",
+      body: JSON.stringify({ url: url.trim(), key: key.trim() || undefined, enabled: true }),
+    }),
+    onSuccess: (d) => {
+      if (d.success) { toast({ title: "Supabase config saved" }); setDirty(false); setKey(""); refetch(); }
+      else toast({ title: "Error", description: d.error, variant: "destructive" });
+    },
+  });
+
+  const testMutation = useMutation({
+    mutationFn: () => authFetch("/api/admin/supabase-test", { method: "POST" }),
+    onSuccess: (d) => {
+      if (d.connected) toast({ title: "Connected!", description: "Supabase connection is working" });
+      else toast({ title: "Connection failed", description: d.error || "Check your URL and key", variant: "destructive" });
+    },
+  });
+
+  const syncMutation = useMutation({
+    mutationFn: () => authFetch("/api/admin/supabase-sync", { method: "POST" }),
+    onSuccess: (d) => {
+      if (d.success) {
+        toast({ title: "Sync complete", description: `${d.synced} customers synced${d.errors > 0 ? `, ${d.errors} errors` : ""}` });
+        refetch();
+      } else toast({ title: "Sync failed", description: d.error, variant: "destructive" });
+    },
+  });
+
+  const disableMutation = useMutation({
+    mutationFn: () => authFetch("/api/admin/supabase-config", { method: "PUT", body: JSON.stringify({ enabled: false }) }),
+    onSuccess: (d) => {
+      if (d.success) { toast({ title: "Supabase backup disabled" }); refetch(); }
+    },
+  });
+
+  return (
+    <div className="glass-card rounded-2xl overflow-hidden">
+      <div className="p-5 border-b border-white/8 flex items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-emerald-600/20 flex items-center justify-center">
+            <Download className="w-5 h-5 text-emerald-400" />
+          </div>
+          <div>
+            <p className="font-semibold text-white">Supabase Customer Backup</p>
+            <p className="text-xs text-white/40">Backup customer data to Supabase for redundancy</p>
+          </div>
+        </div>
+        {cfg?.enabled
+          ? <Badge className="bg-emerald-600/80 text-white border-0 text-xs"><CheckCircle className="w-3 h-3 mr-1" />Active</Badge>
+          : <Badge className="glass border-white/10 text-white/50 text-xs">Disabled</Badge>}
+      </div>
+      <div className="p-5 space-y-4">
+        <div className="flex items-start gap-3 p-3 rounded-xl bg-blue-500/8 border border-blue-500/15 text-xs text-blue-300">
+          <Info className="w-4 h-4 shrink-0 mt-0.5" />
+          <div>
+            Create a <strong>customer_backups</strong> table in your Supabase project with columns:
+            <code className="block mt-1 text-[10px] text-blue-200/70 bg-blue-900/20 rounded p-1.5">
+              local_id (int8, unique), email (text), name (text), password_hash (text), email_verified (bool), suspended (bool), created_at (timestamptz), synced_at (timestamptz)
+            </code>
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          <div>
+            <label className="text-xs text-white/40 block mb-1">Supabase Project URL</label>
+            <Input value={url} onChange={(e) => { setUrl(e.target.value); setDirty(true); }}
+              placeholder="https://xxxxx.supabase.co" className={inputCls} data-testid="input-supabase-url" />
+          </div>
+          <div>
+            <label className="text-xs text-white/40 block mb-1">Service Role Key {cfg?.hasKey && <span className="text-emerald-400">(saved)</span>}</label>
+            <div className="relative">
+              <Input value={key} onChange={(e) => { setKey(e.target.value); setDirty(true); }}
+                type={showKey ? "text" : "password"} placeholder={cfg?.hasKey ? "••••••••  (leave blank to keep)" : "eyJhbGciOi..."}
+                className={inputCls + " pr-9"} data-testid="input-supabase-key" />
+              <button type="button" onClick={() => setShowKey(!showKey)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60">
+                {showKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending || !url.trim()}
+            className="bg-gradient-to-r from-emerald-600 to-teal-600 border-0 text-white text-xs h-8 px-3"
+            data-testid="button-save-supabase">
+            <Save className="w-3 h-3 mr-1.5" />{saveMutation.isPending ? "Saving..." : "Save & Enable"}
+          </Button>
+          {cfg?.enabled && (
+            <>
+              <Button onClick={() => testMutation.mutate()} disabled={testMutation.isPending}
+                variant="outline" className="glass border-white/10 text-white/60 hover:text-white text-xs h-8 px-3"
+                data-testid="button-test-supabase">
+                <Zap className="w-3 h-3 mr-1.5" />{testMutation.isPending ? "Testing..." : "Test Connection"}
+              </Button>
+              <Button onClick={() => syncMutation.mutate()} disabled={syncMutation.isPending}
+                variant="outline" className="glass border-white/10 text-white/60 hover:text-white text-xs h-8 px-3"
+                data-testid="button-sync-supabase">
+                <RefreshCw className={`w-3 h-3 mr-1.5 ${syncMutation.isPending ? "animate-spin" : ""}`} />{syncMutation.isPending ? "Syncing..." : "Sync All Customers"}
+              </Button>
+              <Button onClick={() => disableMutation.mutate()} disabled={disableMutation.isPending}
+                variant="outline" className="glass border-red-500/20 text-red-400 hover:text-red-300 text-xs h-8 px-3"
+                data-testid="button-disable-supabase">
+                <Power className="w-3 h-3 mr-1.5" />Disable
+              </Button>
+            </>
+          )}
+        </div>
+
+        {cfg?.lastSyncAt && (
+          <div className="flex items-center gap-2 text-xs text-white/30">
+            <Clock className="w-3 h-3" />
+            Last sync: {new Date(cfg.lastSyncAt).toLocaleString()} — {cfg.lastSyncCount || 0} customers synced
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -1776,6 +2222,282 @@ function ApiKeysTab() {
           ))}
         </div>
       )}
+
+      {keys.length > 0 && (
+        <div className="glass-card rounded-2xl p-5 mt-6">
+          <p className="text-sm font-semibold text-white mb-3" data-testid="text-admin-api-docs-title">API Documentation</p>
+          <p className="text-xs text-white/40 mb-1">Admin keys (no customer linked) can access admin endpoints. Customer-linked keys access customer endpoints.</p>
+          <p className="text-xs text-white/40 mb-3">Authenticate using the <code className="bg-white/10 px-1 rounded">X-API-Key</code> header.</p>
+          <div className="space-y-3">
+            <p className="text-xs font-bold text-indigo-400 uppercase tracking-wider">Admin Endpoints</p>
+            <div className="rounded-lg p-3 bg-white/5 border border-white/8">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-xs font-bold text-emerald-400 bg-emerald-500/15 px-2 py-0.5 rounded">GET</span>
+                <code className="text-xs text-white/70 font-mono">/api/v1/admin/transactions</code>
+              </div>
+              <p className="text-xs text-white/35 mb-2">List all transactions</p>
+              <code className="text-[10px] text-white/30 bg-black/30 rounded px-2 py-1 block break-all" data-testid="text-curl-admin-transactions">
+                curl -H "X-API-Key: YOUR_ADMIN_KEY" {window.location.origin}/api/v1/admin/transactions
+              </code>
+            </div>
+            <div className="rounded-lg p-3 bg-white/5 border border-white/8">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-xs font-bold text-emerald-400 bg-emerald-500/15 px-2 py-0.5 rounded">GET</span>
+                <code className="text-xs text-white/70 font-mono">/api/v1/admin/stats</code>
+              </div>
+              <p className="text-xs text-white/35 mb-2">Get revenue & order statistics</p>
+              <code className="text-[10px] text-white/30 bg-black/30 rounded px-2 py-1 block break-all" data-testid="text-curl-admin-stats">
+                curl -H "X-API-Key: YOUR_ADMIN_KEY" {window.location.origin}/api/v1/admin/stats
+              </code>
+            </div>
+            <div className="rounded-lg p-3 bg-white/5 border border-white/8">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-xs font-bold text-emerald-400 bg-emerald-500/15 px-2 py-0.5 rounded">GET</span>
+                <code className="text-xs text-white/70 font-mono">/api/v1/admin/customers</code>
+              </div>
+              <p className="text-xs text-white/35 mb-2">List all registered customers</p>
+              <code className="text-[10px] text-white/30 bg-black/30 rounded px-2 py-1 block break-all" data-testid="text-curl-admin-customers">
+                curl -H "X-API-Key: YOUR_ADMIN_KEY" {window.location.origin}/api/v1/admin/customers
+              </code>
+            </div>
+            <p className="text-xs font-bold text-blue-400 uppercase tracking-wider mt-4">Customer Endpoints</p>
+            <div className="rounded-lg p-3 bg-white/5 border border-white/8">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-xs font-bold text-emerald-400 bg-emerald-500/15 px-2 py-0.5 rounded">GET</span>
+                <code className="text-xs text-white/70 font-mono">/api/v1/my-profile</code>
+              </div>
+              <p className="text-xs text-white/35">Get the linked customer's profile</p>
+            </div>
+            <div className="rounded-lg p-3 bg-white/5 border border-white/8">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-xs font-bold text-emerald-400 bg-emerald-500/15 px-2 py-0.5 rounded">GET</span>
+                <code className="text-xs text-white/70 font-mono">/api/v1/my-orders</code>
+              </div>
+              <p className="text-xs text-white/35">Get the linked customer's orders</p>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+// ─── Email Blast Tab ──────────────────────────────────────────
+function EmailBlastTab() {
+  const { toast } = useToast();
+  const [subject, setSubject] = useState("");
+  const [content, setContent] = useState("");
+  const [filter, setFilter] = useState<"all" | "verified" | "suspended">("all");
+  const [customEmails, setCustomEmails] = useState("");
+  const [useCustom, setUseCustom] = useState(false);
+  const [result, setResult] = useState<{ sent: number; failed: number; total: number } | null>(null);
+
+  const { data: custData } = useQuery<any>({
+    queryKey: ["/api/admin/customers"],
+    queryFn: () => authFetch("/api/admin/customers"),
+  });
+
+  const allCustomers = custData?.customers ?? [];
+  const recipientCount = useCustom
+    ? customEmails.split(/[,\n]/).filter((e: string) => e.trim()).length
+    : filter === "verified"
+      ? allCustomers.filter((c: any) => c.emailVerified && !c.suspended).length
+      : filter === "suspended"
+        ? allCustomers.filter((c: any) => c.suspended).length
+        : allCustomers.filter((c: any) => c.emailVerified).length;
+
+  const sendMutation = useMutation({
+    mutationFn: () => {
+      const body: any = { subject: subject.trim(), content: content.trim() };
+      if (useCustom) {
+        body.recipients = customEmails.split(/[,\n]/).map((e: string) => e.trim()).filter(Boolean);
+      } else {
+        body.filter = filter;
+      }
+      return authFetch("/api/admin/email-blast", { method: "POST", body: JSON.stringify(body) });
+    },
+    onSuccess: (d) => {
+      if (d.success) {
+        setResult({ sent: d.sent, failed: d.failed, total: d.total });
+        toast({ title: `Email sent to ${d.sent} recipient(s)`, description: d.failed > 0 ? `${d.failed} failed` : undefined });
+      } else {
+        toast({ title: "Failed", description: d.error, variant: "destructive" });
+      }
+    },
+    onError: () => toast({ title: "Error", description: "Failed to send emails", variant: "destructive" }),
+  });
+
+  const templates = [
+    { label: "New Promo Code", subject: "Exclusive Discount Just for You!", content: "Hey there!\n\nWe have a special promo code just for you: **SAVE20**\n\nUse it at checkout to get 20% off any plan. Hurry — this offer expires soon!\n\nVisit our store to grab your deal." },
+    { label: "New Plan Available", subject: "New Premium Plan Just Launched!", content: "We're excited to announce a brand new plan is now available in our store!\n\nCheck out the latest additions and grab your subscription before stock runs out.\n\nHead over to the store now to see what's new." },
+    { label: "General Update", subject: "Important Update from Chege Tech", content: "Hi there!\n\nWe have some important updates to share with you.\n\n[Write your update here]\n\nThank you for being a valued customer!" },
+    { label: "Special Offer", subject: "Limited Time Offer - Don't Miss Out!", content: "Great news!\n\nFor a limited time, we're running a special offer on selected plans.\n\n[Describe the offer]\n\nThis offer won't last forever — visit the store now!" },
+  ];
+
+  return (
+    <>
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-xl font-bold text-white">Email Blast</h1>
+          <p className="text-xs text-white/40 mt-0.5">Send bulk emails to your customers — promos, offers, updates</p>
+        </div>
+        <Badge className="glass border-white/10 text-white/50">{allCustomers.length} total customers</Badge>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 space-y-4">
+          <div className="glass-card rounded-2xl p-5">
+            <p className="text-sm font-semibold text-white mb-3">Compose Email</p>
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs text-white/50 mb-1 block">Subject</label>
+                <Input
+                  value={subject}
+                  onChange={(e) => setSubject(e.target.value)}
+                  placeholder="Email subject line..."
+                  className="glass border-white/10 bg-white/5 text-white placeholder:text-white/25"
+                  data-testid="input-blast-subject"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-white/50 mb-1 block">Content <span className="text-white/30">(Use **bold** for emphasis, new lines become line breaks)</span></label>
+                <textarea
+                  value={content}
+                  onChange={(e) => setContent(e.target.value)}
+                  placeholder="Write your email content here..."
+                  rows={8}
+                  className="w-full rounded-xl px-4 py-3 text-sm glass border border-white/10 bg-white/5 text-white placeholder:text-white/25 resize-y focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                  data-testid="input-blast-content"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="glass-card rounded-2xl p-5">
+            <p className="text-sm font-semibold text-white mb-3">Recipients</p>
+            <div className="flex items-center gap-3 mb-3">
+              <button
+                onClick={() => setUseCustom(false)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${!useCustom ? "bg-indigo-600 text-white" : "bg-white/5 text-white/40 hover:text-white/70"}`}
+                data-testid="button-filter-mode"
+              >
+                By Filter
+              </button>
+              <button
+                onClick={() => setUseCustom(true)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${useCustom ? "bg-indigo-600 text-white" : "bg-white/5 text-white/40 hover:text-white/70"}`}
+                data-testid="button-custom-mode"
+              >
+                Custom List
+              </button>
+            </div>
+
+            {!useCustom ? (
+              <div className="flex gap-2 flex-wrap">
+                {([
+                  { value: "all", label: "All Verified", desc: "Active + verified customers" },
+                  { value: "verified", label: "Active Only", desc: "Verified & not suspended" },
+                  { value: "suspended", label: "Suspended", desc: "Suspended accounts only" },
+                ] as const).map((opt) => (
+                  <button
+                    key={opt.value}
+                    onClick={() => setFilter(opt.value)}
+                    data-testid={`button-filter-${opt.value}`}
+                    className={`px-3 py-2 rounded-xl text-xs transition-all border ${
+                      filter === opt.value
+                        ? "bg-indigo-600/20 border-indigo-500/40 text-indigo-300"
+                        : "bg-white/5 border-white/8 text-white/40 hover:text-white/70"
+                    }`}
+                  >
+                    <span className="font-medium">{opt.label}</span>
+                    <span className="block text-[10px] opacity-60 mt-0.5">{opt.desc}</span>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div>
+                <label className="text-xs text-white/50 mb-1 block">Email addresses (comma or newline separated)</label>
+                <textarea
+                  value={customEmails}
+                  onChange={(e) => setCustomEmails(e.target.value)}
+                  placeholder="user1@email.com, user2@email.com..."
+                  rows={4}
+                  className="w-full rounded-xl px-4 py-3 text-sm glass border border-white/10 bg-white/5 text-white placeholder:text-white/25 resize-y focus:outline-none focus:ring-2 focus:ring-indigo-500/50 font-mono"
+                  data-testid="input-custom-emails"
+                />
+              </div>
+            )}
+            <p className="text-xs text-white/30 mt-2">
+              {recipientCount} recipient{recipientCount !== 1 ? "s" : ""} will receive this email
+            </p>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <Button
+              onClick={() => sendMutation.mutate()}
+              disabled={!subject.trim() || !content.trim() || recipientCount === 0 || sendMutation.isPending}
+              className="bg-indigo-600 hover:bg-indigo-500 text-white px-6"
+              data-testid="button-send-blast"
+            >
+              {sendMutation.isPending ? (
+                <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Sending...</>
+              ) : (
+                <><Send className="w-4 h-4 mr-2" />Send to {recipientCount} recipient{recipientCount !== 1 ? "s" : ""}</>
+              )}
+            </Button>
+          </div>
+
+          {result && (
+            <div className={`glass-card rounded-2xl p-4 border ${result.failed > 0 ? "border-amber-500/30" : "border-emerald-500/30"}`}>
+              <div className="flex items-center gap-3">
+                {result.failed === 0 ? (
+                  <CheckCircle className="w-5 h-5 text-emerald-400" />
+                ) : (
+                  <AlertTriangle className="w-5 h-5 text-amber-400" />
+                )}
+                <div>
+                  <p className="text-sm font-semibold text-white" data-testid="text-blast-result">
+                    {result.sent} of {result.total} email{result.total !== 1 ? "s" : ""} sent successfully
+                  </p>
+                  {result.failed > 0 && (
+                    <p className="text-xs text-amber-400/70">{result.failed} failed to send</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="space-y-4">
+          <div className="glass-card rounded-2xl p-5">
+            <p className="text-sm font-semibold text-white mb-3">Quick Templates</p>
+            <div className="space-y-2">
+              {templates.map((t, i) => (
+                <button
+                  key={i}
+                  onClick={() => { setSubject(t.subject); setContent(t.content); }}
+                  data-testid={`button-template-${i}`}
+                  className="w-full text-left px-3 py-2.5 rounded-xl bg-white/5 border border-white/8 text-white/60 hover:text-white hover:bg-white/10 transition-all text-xs"
+                >
+                  <span className="font-medium block">{t.label}</span>
+                  <span className="text-[10px] text-white/30 block mt-0.5 truncate">{t.subject}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="glass-card rounded-2xl p-5">
+            <p className="text-sm font-semibold text-white mb-2">Tips</p>
+            <ul className="text-xs text-white/40 space-y-1.5 list-disc list-inside">
+              <li>Use **double asterisks** for bold text</li>
+              <li>Each new line becomes a line break</li>
+              <li>Emails are sent with Chege Tech branding</li>
+              <li>Large batches may take a few moments</li>
+              <li>Check Activity Logs for delivery status</li>
+            </ul>
+          </div>
+        </div>
+      </div>
     </>
   );
 }
@@ -1800,6 +2522,26 @@ function CustomersTab() {
         refetch();
       } else toast({ title: "Failed", description: d.error, variant: "destructive" });
     },
+  });
+
+  const resetPwdMutation = useMutation({
+    mutationFn: (id: number) =>
+      authFetch(`/api/admin/customers/${id}/reset-password`, { method: "POST" }),
+    onSuccess: (d) => {
+      if (d.success) toast({ title: "Password reset", description: d.message });
+      else toast({ title: "Failed", description: d.error, variant: "destructive" });
+    },
+    onError: () => toast({ title: "Error", description: "Failed to reset password", variant: "destructive" }),
+  });
+
+  const disable2faMutation = useMutation({
+    mutationFn: (id: number) =>
+      authFetch(`/api/admin/customers/${id}/disable-2fa`, { method: "POST" }),
+    onSuccess: (d) => {
+      if (d.success) { toast({ title: "2FA disabled", description: d.message }); refetch(); }
+      else toast({ title: "Failed", description: d.error, variant: "destructive" });
+    },
+    onError: () => toast({ title: "Error", description: "Failed to disable 2FA", variant: "destructive" }),
   });
 
   const customers = (data?.customers ?? []).filter((c: any) =>
@@ -1880,19 +2622,41 @@ function CustomersTab() {
                     <span className="text-xs text-white/40">{c.createdAt ? new Date(c.createdAt).toLocaleDateString() : "—"}</span>
                   </TableCell>
                   <TableCell className="text-right">
-                    <button
-                      onClick={() => suspendMutation.mutate({ id: c.id, suspended: !c.suspended })}
-                      disabled={suspendMutation.isPending}
-                      data-testid={`button-suspend-${c.id}`}
-                      title={c.suspended ? "Unsuspend account" : "Suspend account"}
-                      className={`p-1.5 rounded-lg transition-all text-xs font-medium px-3 py-1 ${
-                        c.suspended
-                          ? "bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25"
-                          : "bg-red-500/15 text-red-400 hover:bg-red-500/25"
-                      }`}
-                    >
-                      {c.suspended ? "Unsuspend" : "Suspend"}
-                    </button>
+                    <div className="flex items-center justify-end gap-1.5">
+                      <button
+                        onClick={() => { if (confirm(`Reset password for ${c.email}? A new password will be emailed to them.`)) resetPwdMutation.mutate(c.id); }}
+                        disabled={resetPwdMutation.isPending}
+                        data-testid={`button-reset-pwd-${c.id}`}
+                        title="Reset password"
+                        className="p-1.5 rounded-lg bg-amber-500/15 text-amber-400 hover:bg-amber-500/25 transition-all"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" />
+                      </button>
+                      {c.totpEnabled && (
+                        <button
+                          onClick={() => { if (confirm(`Disable 2FA for ${c.email}? They will be notified by email.`)) disable2faMutation.mutate(c.id); }}
+                          disabled={disable2faMutation.isPending}
+                          data-testid={`button-disable-2fa-${c.id}`}
+                          title="Disable 2FA"
+                          className="p-1.5 rounded-lg bg-indigo-500/15 text-indigo-400 hover:bg-indigo-500/25 transition-all"
+                        >
+                          <Key className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                      <button
+                        onClick={() => suspendMutation.mutate({ id: c.id, suspended: !c.suspended })}
+                        disabled={suspendMutation.isPending}
+                        data-testid={`button-suspend-${c.id}`}
+                        title={c.suspended ? "Unsuspend account" : "Suspend account"}
+                        className={`p-1.5 rounded-lg transition-all text-xs font-medium px-3 py-1 ${
+                          c.suspended
+                            ? "bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25"
+                            : "bg-red-500/15 text-red-400 hover:bg-red-500/25"
+                        }`}
+                      >
+                        {c.suspended ? "Unsuspend" : "Suspend"}
+                      </button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}

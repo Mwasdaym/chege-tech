@@ -1,0 +1,492 @@
+{
+  "netflix": [
+    {
+      "email": "brownsemily202@gmail.com",
+      "username": "",
+      "password": "Anonymous#12",
+      "activationCode": "",
+      "redeemLink": "",
+      "instructions": "",
+      "maxUsers": 5,
+      "id": "netflix_1771861927139_nzchdl1xy",
+      "currentUsers": 0,
+      "fullyUsed": false,
+      "disabled": false,
+      "usedBy": [],
+      "addedAt": "2026-02-23T15:52:07.139Z"
+    }
+  ],
+  "primevideo_6m": [
+    {
+      "email": "wantampresident8@gmail.com",
+      "username": "",
+      "password": "Wantam",
+      "activationCode": "",
+      "redeemLink": "",
+      "instructions": "",
+      "maxUsers": 5,
+      "id": "primevideo_6m_1771940188605_cnge667sj",
+      "currentUsers": 5,
+      "fullyUsed": true,
+      "disabled": false,
+      "usedBy": [
+        {
+          "customerEmail": "johnchege2159@gmail.com",
+          "customerName": "Real chege",
+          "assignedAt": "2026-02-24T13:46:18.341Z"
+        },
+        {
+          "customerEmail": "brownsemily202@gmail.com",
+          "customerName": "Emily Browns",
+          "assignedAt": "2026-02-25T08:21:33.272Z"
+        },
+        {
+          "customerEmail": "brownsemily202@gmail.com",
+          "customerName": "Emily Browns",
+          "assignedAt": "2026-02-25T08:21:34.726Z"
+        },
+        {
+          "customerEmail": "brownsemily202@gmail.com",
+          "customerName": "Emily Browns",
+          "assignedAt": "2026-02-25T08:21:35.656Z"
+        },
+        {
+          "customerEmail": "brownsemily202@gmail.com",
+          "customerName": "Emily Browns",
+          "assignedAt": "2026-02-25T08:21:36.632Z"
+        }
+      ],
+      "addedAt": "2026-02-24T13:36:28.605Z"
+    },
+    {
+      "email": "test1@example.com",
+      "username": "user1",
+      "password": "Test@1234",
+      "activationCode": "",
+      "redeemLink": "",
+      "instructions": "",
+      "maxUsers": 1,
+      "id": "primevideo_6m_1771940407343_z5h3n7iuh",
+      "currentUsers": 0,
+      "fullyUsed": false,
+      "disabled": false,
+      "usedBy": [],
+      "addedAt": "2026-02-24T13:40:07.343Z"
+    },
+    {
+      "email": "test2@example.com",
+      "username": "user2",
+      "password": "Test@1234",
+      "activationCode": "",
+      "redeemLink": "",
+      "instructions": "",
+      "maxUsers": 1,
+      "id": "primevideo_6m_1771940407344_rfo899j0l",
+      "currentUsers": 0,
+      "fullyUsed": false,
+      "disabled": false,
+      "usedBy": [],
+      "addedAt": "2026-02-24T13:40:07.344Z"
+    },
+    {
+      "email": "test3@example.com",
+      "username": "user3",
+      "password": "Test@1234",
+      "activationCode": "",
+      "redeemLink": "",
+      "instructions": "",
+      "maxUsers": 1,
+      "id": "primevideo_6m_1771940407345_pwzrhgnn6",
+      "currentUsers": 0,
+      "fullyUsed": false,
+      "disabled": false,
+      "usedBy": [],
+      "addedAt": "2026-02-24T13:40:07.345Z"
+    },
+    {
+      "email": "test4@example.com",
+      "username": "user4",
+      "password": "Test@1234",
+      "activationCode": "",
+      "redeemLink": "",
+      "instructions": "",
+      "maxUsers": 1,
+      "id": "primevideo_6m_1771940407345_82v67vcxo",
+      "currentUsers": 0,
+      "fullyUsed": false,
+      "disabled": false,
+      "usedBy": [],
+      "addedAt": "2026-02-24T13:40:07.345Z"
+    },
+    {
+      "email": "test5@example.com",
+      "username": "user5",
+      "password": "Test@1234",
+      "activationCode": "",
+      "redeemLink": "",
+      "instructions": "",
+      "maxUsers": 1,
+      "id": "primevideo_6m_1771940407346_rapii7dmu",
+      "currentUsers": 0,
+      "fullyUsed": false,
+      "disabled": false,
+      "usedBy": [],
+      "addedAt": "2026-02-24T13:40:07.346Z"
+    },
+    {
+      "email": "test6@example.com",
+      "username": "user6",
+      "password": "Test@1234",
+      "activationCode": "",
+      "redeemLink": "",
+      "instructions": "",
+      "maxUsers": 1,
+      "id": "primevideo_6m_1771940407347_sw3kzgx45",
+      "currentUsers": 0,
+      "fullyUsed": false,
+      "disabled": false,
+      "usedBy": [],
+      "addedAt": "2026-02-24T13:40:07.347Z"
+    },
+    {
+      "email": "test7@example.com",
+      "username": "user7",
+      "password": "Test@1234",
+      "activationCode": "",
+      "redeemLink": "",
+      "instructions": "",
+      "maxUsers": 1,
+      "id": "primevideo_6m_1771940407347_5ic0qpbfo",
+      "currentUsers": 0,
+      "fullyUsed": false,
+      "disabled": false,
+      "usedBy": [],
+      "addedAt": "2026-02-24T13:40:07.347Z"
+    },
+    {
+      "email": "test8@example.com",
+      "username": "user8",
+      "password": "Test@1234",
+      "activationCode": "",
+      "redeemLink": "",
+      "instructions": "",
+      "maxUsers": 1,
+      "id": "primevideo_6m_1771940407347_25y6pxh48",
+      "currentUsers": 0,
+      "fullyUsed": false,
+      "disabled": false,
+      "usedBy": [],
+      "addedAt": "2026-02-24T13:40:07.347Z"
+    },
+    {
+      "email": "test9@example.com",
+      "username": "user9",
+      "password": "Test@1234",
+      "activationCode": "",
+      "redeemLink": "",
+      "instructions": "",
+      "maxUsers": 1,
+      "id": "primevideo_6m_1771940407348_cde7quxcs",
+      "currentUsers": 0,
+      "fullyUsed": false,
+      "disabled": false,
+      "usedBy": [],
+      "addedAt": "2026-02-24T13:40:07.348Z"
+    },
+    {
+      "email": "test10@example.com",
+      "username": "user10",
+      "password": "Test@1234",
+      "activationCode": "",
+      "redeemLink": "",
+      "instructions": "",
+      "maxUsers": 1,
+      "id": "primevideo_6m_1771940407348_5l1qz77if",
+      "currentUsers": 0,
+      "fullyUsed": false,
+      "disabled": false,
+      "usedBy": [],
+      "addedAt": "2026-02-24T13:40:07.348Z"
+    },
+    {
+      "email": "test11@example.com",
+      "username": "user11",
+      "password": "Test@1234",
+      "activationCode": "",
+      "redeemLink": "",
+      "instructions": "",
+      "maxUsers": 1,
+      "id": "primevideo_6m_1771940407348_h9iub1d8e",
+      "currentUsers": 0,
+      "fullyUsed": false,
+      "disabled": false,
+      "usedBy": [],
+      "addedAt": "2026-02-24T13:40:07.348Z"
+    },
+    {
+      "email": "test12@example.com",
+      "username": "user12",
+      "password": "Test@1234",
+      "activationCode": "",
+      "redeemLink": "",
+      "instructions": "",
+      "maxUsers": 1,
+      "id": "primevideo_6m_1771940407349_15a207jwi",
+      "currentUsers": 0,
+      "fullyUsed": false,
+      "disabled": false,
+      "usedBy": [],
+      "addedAt": "2026-02-24T13:40:07.349Z"
+    },
+    {
+      "email": "test13@example.com",
+      "username": "user13",
+      "password": "Test@1234",
+      "activationCode": "",
+      "redeemLink": "",
+      "instructions": "",
+      "maxUsers": 1,
+      "id": "primevideo_6m_1771940407350_vr715ma6m",
+      "currentUsers": 0,
+      "fullyUsed": false,
+      "disabled": false,
+      "usedBy": [],
+      "addedAt": "2026-02-24T13:40:07.350Z"
+    },
+    {
+      "email": "test14@example.com",
+      "username": "user14",
+      "password": "Test@1234",
+      "activationCode": "",
+      "redeemLink": "",
+      "instructions": "",
+      "maxUsers": 1,
+      "id": "primevideo_6m_1771940407351_g6a195qs1",
+      "currentUsers": 0,
+      "fullyUsed": false,
+      "disabled": false,
+      "usedBy": [],
+      "addedAt": "2026-02-24T13:40:07.351Z"
+    },
+    {
+      "email": "test15@example.com",
+      "username": "user15",
+      "password": "Test@1234",
+      "activationCode": "",
+      "redeemLink": "",
+      "instructions": "",
+      "maxUsers": 1,
+      "id": "primevideo_6m_1771940407351_2i5uamjgk",
+      "currentUsers": 0,
+      "fullyUsed": false,
+      "disabled": false,
+      "usedBy": [],
+      "addedAt": "2026-02-24T13:40:07.351Z"
+    },
+    {
+      "email": "test16@example.com",
+      "username": "user16",
+      "password": "Test@1234",
+      "activationCode": "",
+      "redeemLink": "",
+      "instructions": "",
+      "maxUsers": 1,
+      "id": "primevideo_6m_1771940407351_m1uqspfh5",
+      "currentUsers": 0,
+      "fullyUsed": false,
+      "disabled": false,
+      "usedBy": [],
+      "addedAt": "2026-02-24T13:40:07.351Z"
+    },
+    {
+      "email": "test17@example.com",
+      "username": "user17",
+      "password": "Test@1234",
+      "activationCode": "",
+      "redeemLink": "",
+      "instructions": "",
+      "maxUsers": 1,
+      "id": "primevideo_6m_1771940407352_2kex7jaug",
+      "currentUsers": 0,
+      "fullyUsed": false,
+      "disabled": false,
+      "usedBy": [],
+      "addedAt": "2026-02-24T13:40:07.352Z"
+    },
+    {
+      "email": "test18@example.com",
+      "username": "user18",
+      "password": "Test@1234",
+      "activationCode": "",
+      "redeemLink": "",
+      "instructions": "",
+      "maxUsers": 1,
+      "id": "primevideo_6m_1771940407354_u9kt4xvf7",
+      "currentUsers": 0,
+      "fullyUsed": false,
+      "disabled": false,
+      "usedBy": [],
+      "addedAt": "2026-02-24T13:40:07.354Z"
+    },
+    {
+      "email": "test19@example.com",
+      "username": "user19",
+      "password": "Test@1234",
+      "activationCode": "",
+      "redeemLink": "",
+      "instructions": "",
+      "maxUsers": 1,
+      "id": "primevideo_6m_1771940407354_6ncsnlq8g",
+      "currentUsers": 0,
+      "fullyUsed": false,
+      "disabled": false,
+      "usedBy": [],
+      "addedAt": "2026-02-24T13:40:07.354Z"
+    },
+    {
+      "email": "test20@example.com",
+      "username": "user20",
+      "password": "Test@1234",
+      "activationCode": "",
+      "redeemLink": "",
+      "instructions": "",
+      "maxUsers": 1,
+      "id": "primevideo_6m_1771940407355_w1iiy2vte",
+      "currentUsers": 0,
+      "fullyUsed": false,
+      "disabled": false,
+      "usedBy": [],
+      "addedAt": "2026-02-24T13:40:07.355Z"
+    }
+  ],
+  "showmax_3m": [
+    {
+      "email": "brownsemily202@gmail.com",
+      "username": "",
+      "password": "Ak47@4jkq_1",
+      "activationCode": "",
+      "redeemLink": "",
+      "instructions": "",
+      "maxUsers": 5,
+      "id": "showmax_3m_1771925616313_cs6ioruox",
+      "currentUsers": 2,
+      "fullyUsed": false,
+      "disabled": false,
+      "usedBy": [
+        {
+          "customerEmail": "realchege12@gmail.com",
+          "customerName": "John chege ",
+          "assignedAt": "2026-02-24T11:01:27.570Z"
+        },
+        {
+          "customerEmail": "brownsemily202@gmail.com",
+          "customerName": "Emily Browns",
+          "assignedAt": "2026-02-24T17:36:25.984Z"
+        }
+      ],
+      "addedAt": "2026-02-24T09:33:36.313Z"
+    },
+    {
+      "email": "realchege12@gmail.com",
+      "username": "",
+      "password": "Chege@254",
+      "activationCode": "",
+      "redeemLink": "",
+      "instructions": "",
+      "maxUsers": 5,
+      "id": "showmax_3m_1771940271907_wm58rt872",
+      "currentUsers": 0,
+      "fullyUsed": false,
+      "disabled": false,
+      "usedBy": [],
+      "addedAt": "2026-02-24T13:37:51.907Z"
+    }
+  ],
+  "custom_1771928205932_4ke2re": [
+    {
+      "email": "brownsemily202@gmail.com",
+      "username": "",
+      "password": "Anonymous#12",
+      "activationCode": "",
+      "redeemLink": "",
+      "instructions": "",
+      "maxUsers": 5,
+      "id": "custom_1771928205932_4ke2re_1771928228422_iqworguhq",
+      "currentUsers": 0,
+      "fullyUsed": false,
+      "disabled": false,
+      "usedBy": [],
+      "addedAt": "2026-02-24T10:17:08.422Z"
+    }
+  ],
+  "undefined": [
+    {
+      "email": "realchege12@gmail.com",
+      "password": "wantam@254",
+      "maxUsers": 1,
+      "id": "undefined_1771938161098_j3hg04qwd",
+      "currentUsers": 0,
+      "fullyUsed": false,
+      "disabled": false,
+      "usedBy": [],
+      "addedAt": "2026-02-24T13:02:41.098Z"
+    }
+  ],
+  "showmax_1m": [
+    {
+      "email": "realchege12@gmail.com",
+      "username": "",
+      "password": "Anonymous#13",
+      "activationCode": "",
+      "redeemLink": "",
+      "instructions": "",
+      "maxUsers": 5,
+      "id": "showmax_1m_1771940248937_sxmwu0nrj",
+      "currentUsers": 0,
+      "fullyUsed": false,
+      "disabled": false,
+      "usedBy": [],
+      "addedAt": "2026-02-24T13:37:28.937Z"
+    }
+  ],
+  "showmax_1y": [
+    {
+      "email": "Chege@gmail.com",
+      "username": "",
+      "password": "Test",
+      "activationCode": "",
+      "redeemLink": "",
+      "instructions": "",
+      "maxUsers": 5,
+      "id": "showmax_1y_1771940302971_6hlyvlqn0",
+      "currentUsers": 0,
+      "fullyUsed": false,
+      "disabled": false,
+      "usedBy": [],
+      "addedAt": "2026-02-24T13:38:22.971Z"
+    }
+  ],
+  "peacock_tv": [
+    {
+      "email": "Chege@gmail.com",
+      "username": "",
+      "password": "Test",
+      "activationCode": "",
+      "redeemLink": "",
+      "instructions": "",
+      "maxUsers": 5,
+      "id": "peacock_tv_1771940324470_iutmim822",
+      "currentUsers": 1,
+      "fullyUsed": false,
+      "disabled": false,
+      "usedBy": [
+        {
+          "customerEmail": "y8vtqauu56@wnbaldwy.com",
+          "customerName": "Chegetech",
+          "assignedAt": "2026-02-24T13:43:37.060Z"
+        }
+      ],
+      "addedAt": "2026-02-24T13:38:44.470Z"
+    }
+  ]
+}

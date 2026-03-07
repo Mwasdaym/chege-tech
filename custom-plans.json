@@ -1,0 +1,24 @@
+[
+  {
+    "name": "Chatgpt ",
+    "price": 200,
+    "duration": "1 Month",
+    "features": [],
+    "categoryKey": "other",
+    "categoryName": "Streaming Services",
+    "maxUsers": 1,
+    "id": "custom_1771925490333_4dp98j",
+    "createdAt": "2026-02-24T09:31:30.333Z"
+  },
+  {
+    "name": "Netflix ",
+    "price": 150,
+    "duration": "1 Month",
+    "features": [],
+    "categoryKey": "streaming",
+    "categoryName": "Streaming Services",
+    "maxUsers": 5,
+    "id": "custom_1771928205932_4ke2re",
+    "createdAt": "2026-02-24T10:16:45.932Z"
+  }
+]

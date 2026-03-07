@@ -1,0 +1,14 @@
+[
+  {
+    "code": "223543",
+    "label": "",
+    "discountType": "fixed",
+    "discountValue": 99,
+    "maxUses": null,
+    "expiresAt": null,
+    "applicablePlans": null,
+    "uses": 2,
+    "createdAt": "2026-02-24T10:55:01.678Z",
+    "active": true
+  }
+]
