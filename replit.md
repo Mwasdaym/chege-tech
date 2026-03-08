@@ -57,7 +57,7 @@ For PostgreSQL mode, settings are cached in-memory on startup and written back a
 - **Customers** - View all registered customers, suspend/unsuspend accounts (sends email notification on suspend/unsuspend)
 - **Email Blast** - Send bulk emails to all customers or filtered groups (verified, suspended) or custom email list; quick templates for promos, new plans, offers, updates; max 500 per blast with deduplication
 - **Activity Logs** - Full audit log of all admin actions, filterable by category, clearable
-- **Settings** - Editable credentials (Paystack, Email, Admin login, Telegram Bot), App config (WhatsApp, site name), 2FA management, Admin Users management (superadmin only), Supabase customer backup config
+- **Settings** - Editable credentials (Paystack, Email, Admin login, Telegram Bot), App config (WhatsApp, site name), 2FA management (setup, reconfigure, or **disable directly from the panel** when logged in), Admin Users management (superadmin only), Supabase customer backup config
 - **Multi-Admin** - Primary admin (superadmin) can add/remove additional admin accounts; admins have restricted access (no admin user management, no Supabase config)
 - **Supabase Backup** - Optional Supabase database backup for customer data (email, password hash, verification status); configurable in Settings with test connection and manual sync-all button; auto-syncs on new customer verification
 

@@ -817,6 +817,22 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // ─── Admin: Disable 2FA (when already logged in) ─────────────────────────
+  app.delete("/api/admin/2fa", adminAuthMiddleware, (req: any, res) => {
+    try {
+      if (!isSetupComplete()) {
+        return res.json({ success: true, message: "2FA is already disabled" });
+      }
+      disableAdminTotp();
+      const ip = req.headers["x-forwarded-for"]?.toString() || req.socket.remoteAddress || "unknown";
+      logAdminAction({ action: "Admin 2FA disabled", category: "auth", details: `Disabled directly from admin panel by ${req.adminId || "primary"}`, ip, status: "warning" });
+      res.json({ success: true, message: "Two-factor authentication has been disabled." });
+    } catch (err: any) {
+      console.error("[admin] disable-2fa error:", err.message);
+      res.status(500).json({ success: false, error: "Failed to disable 2FA. Please try again." });
+    }
+  });
+
   // ─── Admin: Verify 2FA Reset Code & Disable 2FA ──────────────────────────
   app.post("/api/admin/reset-2fa/confirm", (req, res) => {
     try {

@@ -664,6 +664,19 @@ function SettingsTab() {
     finally { setIsLoadingTfa(false); }
   }
 
+  async function disableTfa() {
+    if (!window.confirm("Are you sure you want to disable two-factor authentication? You will no longer need an authenticator code to log in.")) return;
+    setIsLoadingTfa(true); setTfaError("");
+    try {
+      const data = await authFetch("/api/admin/2fa", { method: "DELETE" });
+      if (data.success) {
+        toast({ title: "2FA Disabled", description: "You can now log in without an authenticator code." });
+        refetchStatus();
+      } else setTfaError(data.error || "Failed to disable 2FA");
+    } catch { setTfaError("Connection error"); }
+    finally { setIsLoadingTfa(false); }
+  }
+
 
   return (
     <>
@@ -792,11 +805,20 @@ function SettingsTab() {
                   </div>
                 </div>
                 {tfaError && <p className="text-xs text-red-400">{tfaError}</p>}
-                <Button onClick={startSetup} disabled={isLoadingTfa} data-testid="button-start-2fa"
-                  className="bg-gradient-to-r from-indigo-600 to-violet-600 border-0 text-white shadow-lg hover:opacity-90">
-                  <QrCode className="w-4 h-4 mr-2" />
-                  {isLoadingTfa ? "Generating..." : `${setupComplete ? "Reconfigure" : "Set Up"} 2FA`}
-                </Button>
+                <div className="flex flex-wrap gap-3">
+                  <Button onClick={startSetup} disabled={isLoadingTfa} data-testid="button-start-2fa"
+                    className="bg-gradient-to-r from-indigo-600 to-violet-600 border-0 text-white shadow-lg hover:opacity-90">
+                    <QrCode className="w-4 h-4 mr-2" />
+                    {isLoadingTfa ? "Generating..." : `${setupComplete ? "Reconfigure" : "Set Up"} 2FA`}
+                  </Button>
+                  {setupComplete && (
+                    <Button onClick={disableTfa} disabled={isLoadingTfa} variant="outline" data-testid="button-disable-2fa"
+                      className="border-red-500/40 text-red-400 hover:bg-red-500/10 hover:text-red-300 bg-transparent">
+                      <ShieldOff className="w-4 h-4 mr-2" />
+                      {isLoadingTfa ? "Disabling..." : "Disable 2FA"}
+                    </Button>
+                  )}
+                </div>
               </div>
             )}
             {tfaStep === "qr" && setupData && (
